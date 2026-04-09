@@ -1,0 +1,7 @@
+{
+  "name": "isometric-city",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "npx serve . --listen 3000"
+  }
+}

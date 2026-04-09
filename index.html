@@ -1,0 +1,2176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>City Layers — Parallel Layers</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0d14;--panel:#0f1117;--border:rgba(255,255,255,0.07);
+  --dim:rgba(255,255,255,0.30);--mid:rgba(255,255,255,0.55);--sidebar:310px}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
+  font-family:system-ui,-apple-system,sans-serif;color:#fff}
+#app{display:flex;width:100%;height:100vh}
+#canvas-area{flex:1;position:relative;overflow:hidden;min-width:0}
+#canvas-area canvas{display:block}
+
+/* ── sidebar ── */
+#sidebar{width:var(--sidebar);flex-shrink:0;background:var(--panel);
+  border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#sb-scroll{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,0.08) transparent}
+#sb-scroll::-webkit-scrollbar{width:4px}
+#sb-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px}
+#sb-head{padding:16px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+#sb-title{font-size:13px;font-weight:600;letter-spacing:-.01em}
+#sb-sub{font-size:10px;color:var(--dim);margin-top:2px;line-height:1.5}
+
+/* ── section ── */
+.sec{padding:12px 18px;border-bottom:1px solid var(--border)}
+.sec-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+/* ── search ── */
+.search-row{display:flex;gap:6px;margin-bottom:8px}
+.search-input{flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
+  border-radius:6px;color:#fff;font-size:11px;padding:6px 10px;outline:none}
+.search-input::placeholder{color:var(--dim)}
+.search-input:focus{border-color:rgba(80,180,255,0.5);background:rgba(255,255,255,0.08)}
+.quick-cities{display:flex;flex-wrap:wrap;gap:4px}
+.city-chip{font-size:10px;padding:2px 8px;border-radius:10px;
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+  color:var(--mid);cursor:pointer;transition:all .15s}
+.city-chip:hover{background:rgba(255,255,255,0.1);color:#fff}
+
+/* ── time ── */
+#time-big{font-size:28px;font-weight:300;letter-spacing:-.02em;line-height:1;margin-bottom:2px}
+#time-desc{font-size:9px;color:var(--dim);margin-bottom:10px;line-height:1.4}
+.slider-row{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.slider-tick{font-size:9px;color:var(--dim);flex-shrink:0}
+input[type=range]{flex:1;height:3px;-webkit-appearance:none;appearance:none;
+  background:rgba(255,255,255,0.1);border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+  border-radius:50%;background:#fff;cursor:pointer}
+.play-row{display:flex;gap:5px}
+.btn{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);
+  border-radius:6px;color:var(--mid);font-size:11px;padding:5px 10px;cursor:pointer;
+  transition:background .15s,color .15s;flex-shrink:0}
+.btn:hover{background:rgba(255,255,255,0.1);color:#fff}
+.btn.active{background:rgba(255,255,255,0.13);border-color:rgba(255,255,255,0.22);color:#fff}
+#play-btn{flex:1;font-size:11px}
+#ag-wrap{margin-top:9px;height:36px}
+#ag{display:block;width:100%;height:100%}
+
+/* ── calendar ── */
+.cal-nav-row{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.cal-month-label{font-size:11px;font-weight:500;flex:1;text-align:center}
+.cal-nav-btn{background:none;border:none;color:var(--dim);cursor:pointer;font-size:15px;
+  padding:2px 6px;border-radius:4px;line-height:1}
+.cal-nav-btn:hover{background:rgba(255,255,255,0.07);color:#fff}
+.cal-head{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;margin-bottom:3px}
+.cal-head span{font-size:8px;color:var(--dim);text-align:center;padding:2px 0}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px}
+.cal-day{height:26px;border-radius:3px;font-size:10px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--mid);
+  background:rgba(255,255,255,0.02);border:1px solid transparent;position:relative}
+.cal-day:hover:not(.empty){background:rgba(255,255,255,0.07);color:#fff}
+.cal-day.selected{background:rgba(255,255,255,0.14);border-color:rgba(255,255,255,0.28);
+  color:#fff;font-weight:600}
+.cal-day.holiday{color:#ff9966}
+.cal-day.holiday.selected{background:rgba(255,100,50,0.18);border-color:rgba(255,100,50,0.45)}
+.cal-day.weekend{color:rgba(255,255,255,0.4)}
+.cal-day.weekend.holiday{color:#ff9966}
+.cal-day.today{border-color:rgba(80,180,255,0.45)}
+.cal-day.empty{cursor:default;background:none;border:none}
+.cal-day .hd{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
+  width:3px;height:3px;border-radius:50%;background:#ff9966}
+.cal-legend{display:flex;gap:10px;margin-top:7px;font-size:9px;color:var(--dim);align-items:center}
+.cal-legend span{display:flex;align-items:center;gap:3px}
+.leg-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+
+/* ── layer toggles ── */
+.layer-row{display:flex;align-items:center;gap:9px;padding:5px 9px;border-radius:7px;
+  cursor:pointer;transition:background .12s;margin-bottom:2px;
+  border:1px solid transparent;user-select:none}
+.layer-row:hover{background:rgba(255,255,255,0.04)}
+.layer-row.on{background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.07)}
+.l-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.l-name{font-size:11px;flex:1;color:var(--mid)}
+.layer-row.on .l-name{color:#fff}
+.l-chk{width:15px;height:15px;border-radius:4px;flex-shrink:0;
+  border:1px solid rgba(255,255,255,0.14);display:flex;align-items:center;justify-content:center}
+.layer-row.on .l-chk{background:rgba(255,255,255,0.12);border-color:rgba(255,255,255,0.28)}
+.l-chk svg{opacity:0}.layer-row.on .l-chk svg{opacity:1}
+/* opacity sub-row */
+.opacity-ctrl{display:flex;align-items:center;gap:7px;padding:2px 9px 8px 9px}
+.opacity-lbl{font-size:9px;color:var(--dim);flex-shrink:0;white-space:nowrap}
+.opacity-val{font-size:9px;color:var(--dim);width:28px;text-align:right;flex-shrink:0}
+
+/* ── stats ── */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.stat-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);
+  border-radius:7px;padding:7px 9px}
+.stat-lbl{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+.stat-val{font-size:17px;font-weight:500;margin-top:2px;line-height:1}
+.stat-sub{font-size:9px;color:var(--dim);margin-top:1px}
+
+/* ── selected place ── */
+#place-sec{display:none}
+.pl-head{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.pl-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.pl-name{font-size:13px;font-weight:600}
+.pl-type{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+.pl-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.pl-stat{background:rgba(255,255,255,0.03);border-radius:6px;padding:6px 9px}
+.pl-stat-lbl{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em}
+.pl-stat-val{font-size:13px;font-weight:500;margin-top:2px}
+.close-btn{margin-left:auto;background:none;border:none;color:var(--dim);cursor:pointer;font-size:16px;line-height:1;padding:0}
+.close-btn:hover{color:#fff}
+
+/* ── tooltip ── */
+#tip{position:absolute;pointer-events:none;background:rgba(8,10,18,0.96);
+  border:1px solid rgba(255,255,255,0.1);border-radius:9px;padding:10px 13px;
+  font-size:11px;min-width:155px;display:none;z-index:20;box-shadow:0 8px 28px rgba(0,0,0,0.55)}
+#tip-name{font-weight:600;font-size:12px;margin-bottom:4px}
+#tip-type{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.tip-row{display:flex;justify-content:space-between;gap:14px;color:var(--dim);margin-top:2px;font-size:10px}
+.tip-row span{color:#fff}
+
+/* ── canvas overlay ── */
+#canvas-overlay{position:absolute;top:14px;left:14px;display:flex;gap:7px;z-index:10}
+.cv-btn{background:rgba(8,10,18,0.82);border:1px solid rgba(255,255,255,0.1);
+  border-radius:6px;padding:5px 11px;color:rgba(255,255,255,0.6);font-size:10px;
+  cursor:pointer;transition:all .15s}
+.cv-btn:hover{background:rgba(15,18,28,0.95);color:#fff;border-color:rgba(255,255,255,0.2)}
+#canvas-info{position:absolute;bottom:12px;left:14px;font-size:9px;color:rgba(255,255,255,0.18);z-index:10}
+
+/* ── kbd hints ── */
+#kbd-bar{padding:9px 18px;border-top:1px solid var(--border);flex-shrink:0;display:flex;flex-wrap:wrap;gap:7px}
+.kbd-hint{font-size:9px;color:var(--dim);display:flex;align-items:center;gap:3px}
+.kbd-hint kbd{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);
+  border-radius:3px;padding:1px 5px;font-size:9px;font-family:inherit;color:rgba(255,255,255,0.55)}
+
+/* ── loading ── */
+#loading{position:absolute;inset:0;z-index:100;background:rgba(10,13,20,0.96);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.spinner{width:32px;height:32px;border-radius:50%;border:2px solid rgba(255,255,255,0.08);
+  border-top-color:rgba(80,180,255,0.85);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading p{font-size:12px;color:rgba(255,255,255,0.45);text-align:center;max-width:220px;line-height:1.6}
+
+/* ── css2d labels ── */
+.place-label{font-size:11px;font-weight:500;color:rgba(255,255,255,0.68);
+  font-family:system-ui;pointer-events:none;white-space:nowrap;
+  text-shadow:0 1px 4px rgba(0,0,0,0.95)}
+.bt-label{font-size:9px;color:rgba(255,210,70,0.85);font-family:system-ui;
+  pointer-events:none;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.8)}
+
+/* ── season chips ── */
+.season-row{display:flex;gap:4px;margin-bottom:8px}
+.season-chip{flex:1;padding:5px 3px;border-radius:6px;font-size:9px;text-align:center;cursor:pointer;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  color:var(--dim);transition:all .15s;line-height:1.4}
+.season-chip:hover{background:rgba(255,255,255,0.07);color:#fff}
+.season-spring.active{background:rgba(80,200,80,0.12);border-color:rgba(80,200,80,0.4);color:#7fda7f}
+.season-summer.active{background:rgba(255,190,40,0.12);border-color:rgba(255,190,40,0.4);color:#ffc840}
+.season-autumn.active{background:rgba(200,110,40,0.12);border-color:rgba(200,110,40,0.4);color:#e08040}
+.season-winter.active{background:rgba(130,170,255,0.12);border-color:rgba(130,170,255,0.4);color:#90b4ff}
+/* ── weather chips ── */
+.wx-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.wx-chip{padding:5px 2px;border-radius:6px;font-size:9px;text-align:center;cursor:pointer;
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+  color:var(--dim);transition:all .15s;line-height:1.3}
+.wx-chip:hover{background:rgba(255,255,255,0.09);color:#fff}
+.wx-chip.active{background:rgba(80,180,255,0.16);border-color:rgba(80,180,255,0.45);color:#fff}
+.wx-icon{font-size:13px;display:block;margin-bottom:1px}
+/* ── info tooltip ── */
+.info-tip{display:inline-flex;align-items:center;margin-left:4px;cursor:help;position:relative;vertical-align:middle}
+.info-tip .tip-bubble{display:none;position:absolute;left:0;top:calc(100% + 4px);
+  background:rgba(6,8,16,0.97);border:1px solid rgba(255,255,255,0.13);border-radius:8px;
+  padding:8px 11px;font-size:10px;color:rgba(255,255,255,0.65);line-height:1.55;
+  z-index:80;width:215px;pointer-events:none;font-weight:400;text-transform:none;letter-spacing:0;
+  box-shadow:0 8px 24px rgba(0,0,0,0.6)}
+.info-tip:hover .tip-bubble{display:block}
+.info-icon{width:13px;height:13px;border-radius:50%;border:1px solid rgba(255,255,255,0.22);
+  font-size:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--dim);
+  font-style:normal;font-weight:600;letter-spacing:0;text-transform:none;flex-shrink:0}
+/* ── layer sub-description ── */
+.l-sub{font-size:9px;color:var(--dim);line-height:1.3;margin-top:1px}
+/* ── place type badge ── */
+.pl-type-desc{font-size:9px;color:rgba(255,255,255,0.38);margin-top:3px;line-height:1.4}
+
+/* ═══════════════════════════════════════════
+   COVER PAGE — Globe intro
+═══════════════════════════════════════════ */
+#cover{position:fixed;inset:0;z-index:9999;background:#020508;overflow:hidden;
+  transition:opacity 1.1s ease}
+#gcv{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+#gcv:active{cursor:grabbing}
+/* top bar */
+#cov-hd{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;
+  justify-content:space-between;padding:26px 36px;pointer-events:none}
+#cov-hd>*{pointer-events:auto}
+#ct-logo{font-size:11px;font-weight:700;letter-spacing:.3em;color:rgba(190,225,255,0.72);
+  text-transform:uppercase;text-shadow:0 0 28px rgba(80,160,255,0.4);pointer-events:none;
+  animation:logoPulse 5s ease-in-out infinite}
+@keyframes logoPulse{0%,100%{opacity:.6}50%{opacity:.95}}
+#ct-skip{font-size:9px;color:rgba(255,255,255,0.22);background:none;
+  border:1px solid rgba(255,255,255,0.09);border-radius:5px;padding:4px 13px;
+  cursor:pointer;letter-spacing:.05em;transition:all .2s;font-family:inherit}
+#ct-skip:hover{color:rgba(255,255,255,0.6);border-color:rgba(255,255,255,0.24)}
+/* tagline centre */
+#cov-tagline{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;pointer-events:none;margin-top:-50px;transition:opacity .4s}
+#ct-main{font-size:44px;font-weight:100;letter-spacing:.32em;text-transform:uppercase;
+  color:rgba(205,232,255,0.82);text-shadow:0 0 60px rgba(80,160,255,0.38)}
+#ct-sub{font-size:10px;color:rgba(255,255,255,0.26);letter-spacing:.18em;
+  text-transform:uppercase;margin-top:12px}
+/* scroll hint */
+#cov-hint{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+  font-size:9px;color:rgba(255,255,255,0.18);letter-spacing:.1em;text-align:center;
+  pointer-events:none;display:none;white-space:nowrap;
+  animation:hintPulse 4s ease-in-out infinite}
+@keyframes hintPulse{0%,100%{opacity:.35}50%{opacity:.8}}
+/* city preview panel */
+#cov-city{position:absolute;right:30px;top:50%;transform:translateY(-50%);
+  background:rgba(5,10,24,0.97);border:1px solid rgba(50,110,255,0.3);
+  border-radius:14px;padding:22px 26px;width:252px;display:none;
+  box-shadow:0 0 60px rgba(20,80,255,0.12),0 16px 48px rgba(0,0,0,0.65);
+  animation:panelIn .3s ease}
+@keyframes panelIn{from{opacity:0;transform:translateY(-50%) translateX(10px)}
+  to{opacity:1;transform:translateY(-50%) translateX(0)}}
+#cc-badge{font-size:8px;color:rgba(80,155,255,0.55);letter-spacing:.14em;
+  text-transform:uppercase;margin-bottom:10px}
+#cc-name{font-size:22px;font-weight:300;color:rgba(200,235,255,0.95);letter-spacing:.02em}
+#cc-meta{font-size:9px;color:rgba(255,255,255,0.28);margin-top:4px;
+  text-transform:uppercase;letter-spacing:.09em}
+#cc-pop{font-size:11px;color:rgba(140,195,255,0.55);margin-top:9px}
+#cc-sep{height:1px;background:rgba(255,255,255,0.05);margin:14px 0}
+#cc-features{font-size:9px;color:rgba(255,255,255,0.24);line-height:2;letter-spacing:.03em}
+#cc-go{width:100%;margin-top:16px;background:rgba(38,105,255,0.16);
+  border:1px solid rgba(70,150,255,0.38);border-radius:8px;
+  color:rgba(160,212,255,0.9);font-size:11px;padding:11px;cursor:pointer;
+  letter-spacing:.05em;transition:all .22s;font-family:inherit;display:block}
+#cc-go:hover{background:rgba(50,125,255,0.32);color:#c8e8ff;
+  border-color:rgba(100,180,255,0.65);box-shadow:0 0 22px rgba(60,135,255,0.22)}
+/* loading overlay */
+#cov-load{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;z-index:2;
+  background:rgba(2,5,8,0.92);pointer-events:none;transition:opacity .5s}
+#cov-load.done{opacity:0;pointer-events:none}
+#cov-load p{font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:.06em}
+/* zoom level bar */
+#cov-zbar{position:absolute;left:28px;bottom:28px;display:flex;flex-direction:column;
+  gap:5px;align-items:center;pointer-events:none;display:none}
+.zbar-tick{width:1px;height:3px;background:rgba(255,255,255,0.15)}
+#cov-zlbl{font-size:8px;color:rgba(255,255,255,0.2);letter-spacing:.07em;margin-top:2px}
+</style>
+</head>
+<body>
+<!-- ══════════════════════════════════════════════════
+     COVER PAGE — Interactive Globe
+══════════════════════════════════════════════════ -->
+<div id="cover">
+  <canvas id="gcv"></canvas>
+  <!-- top bar -->
+  <div id="cov-hd">
+    <span id="ct-logo">City Layers</span>
+    <button id="ct-skip" onclick="skipIntro()">Enter without selecting ›</button>
+  </div>
+  <!-- centre tagline -->
+  <div id="cov-tagline">
+    <div id="ct-main">Germany</div>
+    <div id="ct-sub">Scroll to zoom · click a city to explore its data layers</div>
+  </div>
+  <!-- scroll hint (shows after map loads) -->
+  <div id="cov-hint">Scroll to zoom &nbsp;·&nbsp; Drag to rotate &nbsp;·&nbsp; Double-click a city to enter</div>
+  <!-- city preview panel (right side, appears on city click) -->
+  <div id="cov-city">
+    <div id="cc-badge">Selected city</div>
+    <div id="cc-name">—</div>
+    <div id="cc-meta">—</div>
+    <div id="cc-pop">—</div>
+    <div id="cc-sep"></div>
+    <div id="cc-features">
+      🏙&nbsp; Real OSM buildings &amp; streets<br>
+      🌿&nbsp; Green cover · parks &amp; forests<br>
+      🚇&nbsp; Rail, U-Bahn &amp; tram lines<br>
+      📡&nbsp; WiFi · Bluetooth · Flow layers<br>
+      🌤&nbsp; 4 seasons · 8 weather modes<br>
+      🕐&nbsp; 24-hour activity simulation
+    </div>
+    <button id="cc-go" onclick="enterCity()">Explore this city  →</button>
+  </div>
+  <!-- world map loading indicator -->
+  <div id="cov-load">
+    <div class="spinner"></div>
+    <p id="cov-load-msg">Loading world map…</p>
+  </div>
+</div>
+
+<div id="app">
+  <div id="canvas-area">
+    <div id="loading"><div class="spinner"></div><p id="load-msg">Loading…</p></div>
+    <div id="tip">
+      <div id="tip-name"></div><div id="tip-type"></div>
+      <div class="tip-row">Dwell <span id="td"></span></div>
+      <div class="tip-row">WiFi <span id="tw"></span></div>
+      <div class="tip-row">Bluetooth <span id="tb2"></span></div>
+      <div class="tip-row">Flows <span id="tf"></span></div>
+    </div>
+    <div id="canvas-overlay">
+      <button class="cv-btn" onclick="resetCamera()">Reset camera</button>
+      <button class="cv-btn" onclick="screenshot()">Screenshot</button>
+    </div>
+    <div id="canvas-info"></div>
+  </div>
+
+  <div id="sidebar">
+    <div id="sb-head">
+      <div id="sb-title">City Layers</div>
+      <div id="sb-sub">OSM · Parallel Layers · Germany</div>
+    </div>
+    <div id="sb-scroll">
+
+      <!-- City search -->
+      <div class="sec">
+        <div class="sec-label">City
+          <span class="info-tip"><i class="info-icon">i</i><span class="tip-bubble">Search any German city to load its real buildings, streets, parks and transit lines from OpenStreetMap (OSM). Data is fetched live — a 2 × 2 km area around the city centre is rendered in 3D.</span></span>
+        </div>
+        <div class="search-row">
+          <input type="text" id="city-input" class="search-input" placeholder="Search German city…"
+            onkeydown="if(event.key==='Enter')searchCity()">
+          <button class="btn" onclick="searchCity()">Go</button>
+        </div>
+        <div class="quick-cities">
+          <span class="city-chip" onclick="loadCity('Weimar')">Weimar</span>
+          <span class="city-chip" onclick="loadCity('Berlin')">Berlin</span>
+          <span class="city-chip" onclick="loadCity('Frankfurt')">Frankfurt</span>
+          <span class="city-chip" onclick="loadCity('München')">München</span>
+          <span class="city-chip" onclick="loadCity('Hamburg')">Hamburg</span>
+          <span class="city-chip" onclick="loadCity('Köln')">Köln</span>
+        </div>
+      </div>
+
+      <!-- Season + Weather -->
+      <div class="sec">
+        <div class="sec-label">Season &amp; Weather
+          <span class="info-tip"><i class="info-icon">i</i><span class="tip-bubble">Switch between German seasons (affects vegetation colour, ground and activity levels) and weather conditions (affects lighting, fog and precipitation effects). Seasons auto-follow the calendar date or click a chip to jump.</span></span>
+        </div>
+        <div class="season-row">
+          <div class="season-chip season-spring" id="sc-spring" onclick="setSeason('spring')" title="Spring: Mar–May · Fresh growth, moderate activity">🌱<br>Spring</div>
+          <div class="season-chip season-summer" id="sc-summer" onclick="setSeason('summer')" title="Summer: Jun–Aug · Peak activity, lush vegetation">☀️<br>Summer</div>
+          <div class="season-chip season-autumn" id="sc-autumn" onclick="setSeason('autumn')" title="Autumn: Sep–Nov · Falling leaves, warm tones">🍂<br>Autumn</div>
+          <div class="season-chip season-winter" id="sc-winter" onclick="setSeason('winter')" title="Winter: Dec–Feb · Cold, low activity, snow possible">❄️<br>Winter</div>
+        </div>
+        <div class="wx-grid">
+          <div class="wx-chip" id="wx-sunny"         onclick="setWeather('sunny')"        title="Clear sky, full sunshine"><span class="wx-icon">☀️</span>Sunny</div>
+          <div class="wx-chip" id="wx-partly_cloudy" onclick="setWeather('partly_cloudy')" title="Mix of sun and clouds"><span class="wx-icon">⛅</span>P.Cloudy</div>
+          <div class="wx-chip" id="wx-cloudy"        onclick="setWeather('cloudy')"       title="Overcast sky, diffuse light"><span class="wx-icon">☁️</span>Cloudy</div>
+          <div class="wx-chip" id="wx-rainy"         onclick="setWeather('rainy')"        title="Rainfall reduces outdoor activity"><span class="wx-icon">🌧️</span>Rain</div>
+          <div class="wx-chip" id="wx-foggy"         onclick="setWeather('foggy')"        title="Dense fog limits visibility"><span class="wx-icon">🌫️</span>Fog</div>
+          <div class="wx-chip" id="wx-snowy"         onclick="setWeather('snowy')"        title="Snowfall, typical German winter"><span class="wx-icon">❄️</span>Snow</div>
+          <div class="wx-chip" id="wx-storm"         onclick="setWeather('storm')"        title="Thunderstorm, very low activity"><span class="wx-icon">⛈️</span>Storm</div>
+          <div class="wx-chip" id="wx-heatwave"      onclick="setWeather('heatwave')"     title="Summer heat wave · parks & plazas peak"><span class="wx-icon">🌡️</span>Heatwave</div>
+        </div>
+      </div>
+
+      <!-- Time -->
+      <div class="sec">
+        <div class="sec-label">Time of day
+          <span class="info-tip"><i class="info-icon">i</i><span class="tip-bubble">Drag the slider or press ← → to move through the 24-hour day. Activity curves change based on day type (workday, weekend, holiday) and season. Press Play to animate automatically.</span></span>
+        </div>
+        <div id="time-big">13:00</div>
+        <div id="time-desc">Workday · Afternoon · CET</div>
+        <div class="slider-row" style="margin-top:9px">
+          <span class="slider-tick">00</span>
+          <input type="range" id="slt" min="0" max="23" value="13" step="1" oninput="setHour(+this.value)">
+          <span class="slider-tick">23</span>
+        </div>
+        <div class="play-row">
+          <button class="btn" id="play-btn" onclick="togglePlay()">&#9654; Play</button>
+          <button class="btn" id="sp-slow" onclick="setSpeed(0.5)">0.5&times;</button>
+          <button class="btn active" id="sp-norm" onclick="setSpeed(1)">1&times;</button>
+          <button class="btn" id="sp-fast" onclick="setSpeed(2)">2&times;</button>
+        </div>
+        <div id="ag-wrap"><canvas id="ag"></canvas></div>
+      </div>
+
+      <!-- Calendar 2026 -->
+      <div class="sec">
+        <div class="sec-label">
+          2026 Calendar
+          <span class="info-tip"><i class="info-icon">i</i><span class="tip-bubble">Select any date to change the day type (workday, weekend, public holiday). German public holidays for Thüringen are highlighted in orange and affect activity levels and time-zone labels (CET / CEST).</span></span>
+        </div>
+        <div class="cal-nav-row">
+          <button class="cal-nav-btn" onclick="calNav(-1)">&#8249;</button>
+          <span class="cal-month-label" id="cal-month-lbl">April 2026</span>
+          <button class="cal-nav-btn" onclick="calNav(1)">&#8250;</button>
+        </div>
+        <div class="cal-head">
+          <span>Mo</span><span>Tu</span><span>We</span>
+          <span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
+        </div>
+        <div id="cal-grid" class="cal-grid"></div>
+        <div class="cal-legend">
+          <span><span class="leg-dot" style="background:#ff9966"></span> Holiday</span>
+          <span><span class="leg-dot" style="background:rgba(255,255,255,0.5)"></span> Selected</span>
+          <span><span class="leg-dot" style="background:rgba(80,180,255,0.6)"></span> Today</span>
+        </div>
+      </div>
+
+      <!-- Layers -->
+      <div class="sec">
+        <div class="sec-label">Data layers
+          <span class="info-tip"><i class="info-icon">i</i><span class="tip-bubble">Each layer visualises a different dimension of city life. Toggle layers on/off to compare overlapping realities — physical space, social activity, digital signals and memory traces all occupy the same city simultaneously.</span></span>
+        </div>
+        <div id="layers-list"></div>
+      </div>
+
+      <!-- Stats -->
+      <div class="sec">
+        <div class="sec-label">Live statistics
+          <span class="info-tip"><i class="info-icon">i</i><span class="tip-bubble">Simulated sensor readings that update with every hour and day change. <b>WiFi probes</b>: devices detected by access points. <b>BT streams</b>: active Bluetooth audio sessions. <b>Dwell</b>: average rest-zone stay duration. <b>Flow crossings</b>: pedestrian route traversals.</span></span>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-lbl">People</div><div class="stat-val" id="sp">0</div><div class="stat-sub">in city</div></div>
+          <div class="stat-card"><div class="stat-lbl">WiFi probes</div><div class="stat-val" id="sw">0</div><div class="stat-sub">devices</div></div>
+          <div class="stat-card"><div class="stat-lbl">BT streams</div><div class="stat-val" id="sb2">0</div><div class="stat-sub">active</div></div>
+          <div class="stat-card"><div class="stat-lbl">Avg dwell</div><div class="stat-val" id="sd">0m</div><div class="stat-sub">rest zones</div></div>
+          <div class="stat-card"><div class="stat-lbl">Flow crossings</div><div class="stat-val" id="sfl">0</div><div class="stat-sub">total</div></div>
+          <div class="stat-card"><div class="stat-lbl">Peak spot</div><div class="stat-val" id="sk" style="font-size:11px;margin-top:5px">—</div><div class="stat-sub">busiest WiFi</div></div>
+        </div>
+      </div>
+
+      <!-- Selected place -->
+      <div class="sec" id="place-sec">
+        <div class="sec-label">Selected place</div>
+        <div class="pl-head">
+          <div class="pl-dot" id="pl-dot"></div>
+          <div><div class="pl-name" id="pl-name">—</div><div class="pl-type" id="pl-type">—</div><div class="pl-type-desc" id="pl-type-desc"></div></div>
+          <button class="close-btn" onclick="deselect()">&#215;</button>
+        </div>
+        <div class="pl-grid">
+          <div class="pl-stat"><div class="pl-stat-lbl">Dwell</div><div class="pl-stat-val" id="ps-d">—</div></div>
+          <div class="pl-stat"><div class="pl-stat-lbl">WiFi</div><div class="pl-stat-val" id="ps-w">—</div></div>
+          <div class="pl-stat"><div class="pl-stat-lbl">Bluetooth</div><div class="pl-stat-val" id="ps-b">—</div></div>
+          <div class="pl-stat"><div class="pl-stat-lbl">Flows</div><div class="pl-stat-val" id="ps-f">—</div></div>
+        </div>
+      </div>
+
+    </div><!-- /sb-scroll -->
+    <div id="kbd-bar">
+      <span class="kbd-hint"><kbd>Space</kbd> play</span>
+      <span class="kbd-hint"><kbd>&#8592;</kbd><kbd>&#8594;</kbd> hour</span>
+      <span class="kbd-hint"><kbd>Esc</kbd> deselect</span>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls }   from 'three/addons/controls/OrbitControls.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+/* ══════════════════════════════════════
+   Dynamic city state
+══════════════════════════════════════ */
+let CLat = 50.9793, CLon = 11.3290;
+let LonM = 111320 * Math.cos(CLat * Math.PI / 180);
+const LatM = 111320;
+let BBOX = makeBBOX(CLat, CLon);
+let cityName = 'Weimar';
+
+function makeBBOX(lat, lon, km=1) {
+  const dLat = km / 111.32;
+  const dLon = km / (111.32 * Math.cos(lat * Math.PI / 180));
+  return `${(lat-dLat).toFixed(4)},${(lon-dLon).toFixed(4)},${(lat+dLat).toFixed(4)},${(lon+dLon).toFixed(4)}`;
+}
+function toLocal(lat, lon) {
+  return { x: (lon-CLon)*LonM, z: -(lat-CLat)*LatM };
+}
+
+/* ══════════════════════════════════════
+   Three.js renderer
+══════════════════════════════════════ */
+const areaEl = document.getElementById('canvas-area');
+const renderer = new THREE.WebGLRenderer({ antialias:true, logarithmicDepthBuffer:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+areaEl.appendChild(renderer.domElement);
+
+const css2d = new CSS2DRenderer();
+css2d.domElement.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;overflow:hidden;width:100%;height:100%';
+areaEl.appendChild(css2d.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0d14);
+scene.fog = new THREE.FogExp2(0x0a0d14, 0.00055);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 1, 6000);
+camera.position.set(0, 650, 700);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.07;
+controls.minDistance = 30; controls.maxDistance = 2400;
+controls.maxPolarAngle = Math.PI * 0.83;
+controls.target.set(0,0,0); controls.update();
+
+/* lights */
+const ambientLight = new THREE.AmbientLight(0x8899bb, 1.0);
+scene.add(ambientLight);
+const sun = new THREE.DirectionalLight(0xfff5e8, 1.5);
+sun.position.set(400,700,-400); sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+const sc=sun.shadow.camera; sc.left=sc.bottom=-1300; sc.right=sc.top=1300; sc.near=10; sc.far=2500;
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0x4466aa, 0.4);
+fill.position.set(-400,250,500); scene.add(fill);
+
+/* ground */
+const ground = new THREE.Mesh(
+  Object.assign(new THREE.PlaneGeometry(2800,2800),{}).rotateX(-Math.PI/2),
+  new THREE.MeshLambertMaterial({color:0x111820}));
+ground.position.y = -0.3; ground.receiveShadow = true; scene.add(ground);
+
+/* materials */
+const M_BLD  = new THREE.MeshLambertMaterial({color:0xf0f0f2});
+const M_ST   = new THREE.MeshLambertMaterial({color:0x686878});
+const M_SQ   = new THREE.MeshLambertMaterial({color:0x888898});
+const M_GREEN= new THREE.MeshLambertMaterial({color:0x2a8a1a,transparent:true,opacity:0.88});
+
+/* layer groups */
+const G = {
+  phy:  new THREE.Group(), rail: new THREE.Group(), green: new THREE.Group(),
+  ppl:  new THREE.Group(), wifi: new THREE.Group(),
+  bt:   new THREE.Group(), flow: new THREE.Group(),
+  dwell:new THREE.Group(), mem:  new THREE.Group(),
+  mark: new THREE.Group(),
+};
+Object.values(G).forEach(g => scene.add(g));
+
+/* ══════════════════════════════════════
+   German public holidays 2026 (Thüringen)
+══════════════════════════════════════ */
+const HOLIDAYS_2026 = {
+  '2026-01-01':'Neujahr',
+  '2026-04-03':'Karfreitag',
+  '2026-04-06':'Ostermontag',
+  '2026-05-01':'Tag der Arbeit',
+  '2026-05-14':'Christi Himmelfahrt',
+  '2026-05-25':'Pfingstmontag',
+  '2026-10-03':'Tag der Deutschen Einheit',
+  '2026-10-31':'Reformationstag',
+  '2026-12-25':'1. Weihnachtstag',
+  '2026-12-26':'2. Weihnachtstag',
+};
+const TODAY = new Date(2026,3,9); // 9 April 2026
+let selectedDate = new Date(TODAY);
+let calMonth = 3, calYear = 2026; // April 2026
+
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function isHoliday(d) { return !!HOLIDAYS_2026[dateKey(d)]; }
+function getDayType(d) {
+  const dow = d.getDay();
+  if (dow===0||dow===6) return 'weekend';
+  if (isHoliday(d)) return 'holiday';
+  return 'workday';
+}
+function lastSundayOf(year,month){
+  const d=new Date(year,month+1,0); d.setDate(d.getDate()-d.getDay()); return d;
+}
+function isInCEST(d) {
+  const start=lastSundayOf(d.getFullYear(),2); // March
+  const end  =lastSundayOf(d.getFullYear(),9); // October
+  return d>=start && d<end;
+}
+
+/* activity curve — day-type aware */
+function ts(h) {
+  const type = getDayType(selectedDate);
+  if (type==='workday') {
+    // European office hours 8–17, lunch peak noon
+    if(h<6) return 0.04;
+    if(h<8) return 0.04+(h-6)*0.08;
+    if(h<9) return 0.20+(h-8)*0.20;
+    if(h<12)return 0.40+(h-9)*0.20;
+    if(h<13)return 1.00;
+    if(h<14)return 0.88-(h-13)*0.08;
+    if(h<17)return 0.88-(h-14)*0.02;
+    if(h<19)return 0.82-(h-17)*0.16;
+    if(h<21)return 0.50-(h-19)*0.12;
+    if(h<23)return 0.26-(h-21)*0.09;
+    return 0.08-(h-23)*0.04;
+  } else if(type==='weekend') {
+    // Slower start, leisure afternoon
+    if(h<7) return 0.04;
+    if(h<9) return 0.04+(h-7)*0.08;
+    if(h<11)return 0.20+(h-9)*0.15;
+    if(h<14)return 0.50+(h-11)*0.16;
+    if(h<16)return 0.98;
+    if(h<18)return 0.98-(h-16)*0.06;
+    if(h<20)return 0.86-(h-18)*0.08;
+    if(h<22)return 0.70-(h-20)*0.15;
+    return 0.40-(h-22)*0.18;
+  } else {
+    // Public holiday — high outdoor, midday peak
+    if(h<8) return 0.06;
+    if(h<10)return 0.06+(h-8)*0.12;
+    if(h<13)return 0.30+(h-10)*0.23;
+    if(h<16)return 0.99;
+    if(h<18)return 0.99-(h-16)*0.07;
+    if(h<20)return 0.85-(h-18)*0.10;
+    if(h<22)return 0.65-(h-20)*0.15;
+    return 0.35-(h-22)*0.15;
+  }
+}
+
+function timeDesc(h) {
+  const type = getDayType(selectedDate);
+  const typeLabel = type==='workday'?'Workday':type==='weekend'?'Weekend':'Public Holiday';
+  const period = h<6?'Night':h<12?'Morning':h<18?'Afternoon':'Evening';
+  const tz = isInCEST(selectedDate)?'CEST (UTC+2)':'CET (UTC+1)';
+  const hol = isHoliday(selectedDate)?` · ${HOLIDAYS_2026[dateKey(selectedDate)]}` : '';
+  return `${typeLabel} · ${period} · ${tz}${hol}`;
+}
+
+const MONTH_NAMES = ['January','February','March','April','May','June',
+  'July','August','September','October','November','December'];
+const DAY_ABBR = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+/* ══════════════════════════════════════
+   Calendar widget
+══════════════════════════════════════ */
+function renderCalendar() {
+  const grid = document.getElementById('cal-grid');
+  document.getElementById('cal-month-lbl').textContent = `${MONTH_NAMES[calMonth]} ${calYear}`;
+  grid.innerHTML = '';
+  const firstDow = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  // Start Monday: offset = (firstDow+6)%7 empty cells
+  const offset = (firstDow+6)%7;
+  for (let i=0; i<offset; i++) {
+    const e=document.createElement('div'); e.className='cal-day empty'; grid.appendChild(e);
+  }
+  for (let d=1; d<=daysInMonth; d++) {
+    const date = new Date(calYear, calMonth, d);
+    const dk   = dateKey(date);
+    const dow  = date.getDay();
+    const isWE = dow===0||dow===6;
+    const isHol= !!HOLIDAYS_2026[dk];
+    const isSel= dk===dateKey(selectedDate);
+    const isTod= dk===dateKey(TODAY);
+    let cls = 'cal-day';
+    if(isWE) cls+=' weekend';
+    if(isHol) cls+=' holiday';
+    if(isSel) cls+=' selected';
+    if(isTod) cls+=' today';
+    const el=document.createElement('div');
+    el.className=cls;
+    el.textContent=d;
+    if(isHol) { const dot=document.createElement('div'); dot.className='hd'; el.appendChild(dot); }
+    el.title = isHol ? HOLIDAYS_2026[dk] : (isWE?'Weekend':'Workday');
+    el.addEventListener('click',()=>{ selectedDate=new Date(calYear,calMonth,d); renderCalendar(); updateSeasonalColors(); rebuild(); drawActivityGraph(); updateTimeDisplay(); });
+    grid.appendChild(el);
+  }
+}
+
+function calNav(dir) {
+  calMonth += dir;
+  if(calMonth<0){calMonth=11;calYear--;}
+  if(calMonth>11){calMonth=0;calYear++;}
+  renderCalendar();
+}
+
+function updateTimeDisplay() {
+  const h = hourN;
+  document.getElementById('time-desc').textContent = timeDesc(h);
+  const d = selectedDate;
+  const wd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+  document.getElementById('sb-sub').textContent =
+    `${wd}, ${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0,3)} ${d.getFullYear()} · OSM`;
+}
+
+/* ══════════════════════════════════════
+   Simulation data
+══════════════════════════════════════ */
+/* ══════════════════════════════════════
+   Season helpers
+══════════════════════════════════════ */
+function getSeason(date){
+  const m=date.getMonth();
+  if(m>=2&&m<=4) return 'spring';
+  if(m>=5&&m<=7) return 'summer';
+  if(m>=8&&m<=10) return 'autumn';
+  return 'winter';
+}
+const GREEN_SEASON={spring:0x4aaa3a,summer:0x2a8a1a,autumn:0xbb7a18,winter:0x5a7050};
+const GROUND_SEASON={spring:0x111c10,summer:0x0f1a0e,autumn:0x18150d,winter:0x141820};
+
+function updateSeasonalColors(){
+  const s=getSeason(selectedDate);
+  M_GREEN.color.set(GREEN_SEASON[s]);
+  ground.material.color.set(GROUND_SEASON[s]);
+  updateSeasonUI();
+}
+function updateSeasonUI(){
+  const s=getSeason(selectedDate);
+  ['spring','summer','autumn','winter'].forEach(k=>{
+    const el=document.getElementById('sc-'+k);
+    if(el) el.classList.toggle('active',k===s);
+  });
+}
+function setSeason(s){
+  const monthMap={spring:3,summer:6,autumn:9,winter:0};
+  calMonth=monthMap[s]; calYear=2026;
+  selectedDate=new Date(calYear,calMonth,15);
+  renderCalendar(); updateSeasonalColors(); rebuild(); drawActivityGraph(); updateTimeDisplay();
+}
+
+/* ══════════════════════════════════════
+   Weather system
+══════════════════════════════════════ */
+const WEATHERS={
+  sunny:        {label:'Sunny',        fog:0.00040,fogColor:0x0a0d14,ambient:1.05,sunI:1.60,activity:1.00},
+  partly_cloudy:{label:'Partly Cloudy',fog:0.00055,fogColor:0x0d1018,ambient:0.88,sunI:1.10,activity:0.95},
+  cloudy:       {label:'Cloudy',       fog:0.00072,fogColor:0x0e1220,ambient:0.68,sunI:0.60,activity:0.85},
+  rainy:        {label:'Rain',         fog:0.00095,fogColor:0x081015,ambient:0.55,sunI:0.40,activity:0.65,precip:'rain'},
+  foggy:        {label:'Fog',          fog:0.00280,fogColor:0x131e2c,ambient:0.62,sunI:0.50,activity:0.72},
+  snowy:        {label:'Snow',         fog:0.00115,fogColor:0x0f1525,ambient:0.80,sunI:0.85,activity:0.55,precip:'snow'},
+  storm:        {label:'Thunderstorm', fog:0.00160,fogColor:0x060a0f,ambient:0.35,sunI:0.20,activity:0.42,precip:'rain'},
+  heatwave:     {label:'Heatwave',     fog:0.00038,fogColor:0x0d0a08,ambient:1.10,sunI:1.80,activity:1.15},
+};
+let currentWeather='sunny';
+let weatherActivityMod=1.0;
+
+function setWeather(key){
+  const w=WEATHERS[key]; if(!w) return;
+  currentWeather=key; weatherActivityMod=w.activity;
+  scene.fog.density=w.fog; scene.fog.color.set(w.fogColor);
+  scene.background.set(w.fogColor);
+  ambientLight.intensity=w.ambient; sun.intensity=w.sunI;
+  setupPrecipitation(w.precip||null);
+  Object.keys(WEATHERS).forEach(k=>{
+    const el=document.getElementById('wx-'+k);
+    if(el) el.classList.toggle('active',k===key);
+  });
+  rebuild();
+}
+
+/* ══════════════════════════════════════
+   Precipitation particles
+══════════════════════════════════════ */
+let G_precip=null, precipGeo=null;
+const PRECIP_COUNT=1800;
+
+function setupPrecipitation(type){
+  if(G_precip){scene.remove(G_precip);G_precip=null;precipGeo=null;}
+  if(!type) return;
+  const isRain=type==='rain';
+  G_precip=new THREE.Group(); scene.add(G_precip);
+  const pos=new Float32Array(PRECIP_COUNT*3);
+  for(let i=0;i<PRECIP_COUNT;i++){
+    pos[i*3]  =(Math.random()-.5)*900;
+    pos[i*3+1]=Math.random()*380;
+    pos[i*3+2]=(Math.random()-.5)*900;
+  }
+  precipGeo=new THREE.BufferGeometry();
+  precipGeo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  const mat=new THREE.PointsMaterial({
+    color:isRain?0x88aacc:0xddeeff,
+    size:isRain?1.8:3.2,transparent:true,
+    opacity:isRain?0.55:0.80,sizeAttenuation:false
+  });
+  G_precip.add(new THREE.Points(precipGeo,mat));
+}
+function animatePrecip(){
+  if(!precipGeo) return;
+  const isRain=WEATHERS[currentWeather]?.precip==='rain';
+  const arr=precipGeo.attributes.position.array;
+  const speed=isRain?7.0:1.2, drift=isRain?0.25:0.55;
+  for(let i=0;i<PRECIP_COUNT;i++){
+    arr[i*3]  +=(Math.random()-.5)*drift;
+    arr[i*3+1]-=speed+Math.random()*speed*.4;
+    if(isRain) arr[i*3+2]+=0.18;
+    if(arr[i*3+1]<-5){
+      arr[i*3+1]=380;
+      arr[i*3]  =(Math.random()-.5)*900;
+      arr[i*3+2]=(Math.random()-.5)*900;
+    }
+  }
+  precipGeo.attributes.position.needsUpdate=true;
+}
+
+/* ══════════════════════════════════════
+   Place type descriptions
+══════════════════════════════════════ */
+const TYPE_DESC={
+  plaza:  'A public open space for gatherings, markets and civic events — the social heart of the neighbourhood.',
+  street: 'A pedestrian or mixed-use thoroughfare. High footfall makes this a key node in the city\'s flow network.',
+  bench:  'A rest area offering seating. Dwell time is high here — people pause, observe and recharge.',
+  facade: 'The building frontage at the boundary between private interior and public street life.',
+  garden: 'A curated green space for quiet leisure, often attached to a public building or historic site.',
+  park:   'A large public green area combining nature, recreation and informal social activity.',
+};
+
+const SONGS = ['Burial','Four Tet','Nils Frahm','Bicep','Arca','Jon Hopkins','Moderat','Satie'];
+const PLACE_COLORS = [0xe8a020,0xe8a020,0x2db87a,0x2db87a,0x7b6ef0,0xe8607a,0xe8a020,0x7b6ef0,0xe8a020,0x2db87a];
+const WEIMAR_FB = [
+  {id:'theaterplatz',label:'Theaterplatz',type:'plaza', lat:50.97920,lon:11.32770,bD:480,bW:38,bB:9,bF:84, c:0xe8a020},
+  {id:'marktplatz',  label:'Marktplatz',  type:'plaza', lat:50.97850,lon:11.33020,bD:350,bW:25,bB:6,bF:65, c:0xe8a020},
+  {id:'herderplatz', label:'Herderplatz', type:'plaza', lat:50.98010,lon:11.33110,bD:220,bW:15,bB:4,bF:40, c:0x2db87a},
+  {id:'goetheplatz', label:'Goetheplatz', type:'plaza', lat:50.97880,lon:11.32840,bD:290,bW:20,bB:5,bF:55, c:0xe8a020},
+  {id:'schillerstr', label:'Schillerstr.',type:'street',lat:50.97690,lon:11.33030,bD:180,bW:12,bB:3,bF:35, c:0x7b6ef0},
+  {id:'ampalais',    label:'Am Palais',   type:'bench', lat:50.97970,lon:11.33250,bD:150,bW:10,bB:2,bF:28, c:0xe8607a},
+  {id:'wielandplatz',label:'Wielandplatz',type:'plaza', lat:50.97740,lon:11.32680,bD:190,bW:13,bB:3,bF:38, c:0xe8a020},
+  {id:'jakobsplan',  label:'Jakobsplan',  type:'plaza', lat:50.97600,lon:11.32920,bD:130,bW:9, bB:2,bF:25, c:0x7b6ef0},
+];
+
+let PLACES=[], CONNS=[], routePaths=[];
+let sim={}, people=[], hourN=13, frame=0, sel=null;
+let streetGraph=new Map(), nodePositions=new Map();
+let wifiObjs=[], flowObjs=[], dwellObjs=[], memObjs=[], pplObjs=[], btLabelNodes=[], placeLabels=[];
+
+function rnd(a,b){return a+(b-a)*Math.random();}
+
+/* ══════════════════════════════════════
+   Min-heap (for Dijkstra)
+══════════════════════════════════════ */
+class MinHeap {
+  constructor(){this.h=[];}
+  push(it){
+    this.h.push(it);let i=this.h.length-1;
+    while(i>0){const p=(i-1)>>1;if(this.h[p].d<=this.h[i].d)break;
+      [this.h[p],this.h[i]]=[this.h[i],this.h[p]];i=p;}
+  }
+  pop(){
+    if(this.h.length===1)return this.h.pop();
+    const top=this.h[0];this.h[0]=this.h.pop();
+    let i=0;for(;;){let s=i,l=2*i+1,r=l+1;
+      if(l<this.h.length&&this.h[l].d<this.h[s].d)s=l;
+      if(r<this.h.length&&this.h[r].d<this.h[s].d)s=r;
+      if(s===i)break;[this.h[s],this.h[i]]=[this.h[i],this.h[s]];i=s;}
+    return top;
+  }
+  get size(){return this.h.length;}
+}
+
+/* ══════════════════════════════════════
+   Street routing
+══════════════════════════════════════ */
+function nearestStreetNode(cx, cz) {
+  let bestId=null, bestD=Infinity;
+  nodePositions.forEach((pos,id)=>{
+    const d=Math.hypot(pos.x-cx,pos.z-cz);
+    if(d<bestD){bestD=d;bestId=id;}
+  });
+  return bestId;
+}
+
+function dijkstra(startId, endId) {
+  if(startId===endId||!streetGraph.size) return null;
+  const dist=new Map([[startId,0]]);
+  const prev=new Map();
+  const pq=new MinHeap();
+  pq.push({d:0,id:startId});
+  while(pq.size>0){
+    const {d,id}=pq.pop();
+    if(id===endId) break;
+    if(d>(dist.get(id)??Infinity)) continue;
+    for(const nb of (streetGraph.get(id)||[])){
+      const nd=d+nb.d;
+      if(nd<(dist.get(nb.id)??Infinity)){
+        dist.set(nb.id,nd); prev.set(nb.id,id);
+        pq.push({d:nd,id:nb.id});
+      }
+    }
+  }
+  if(!prev.has(endId)) return null;
+  const path=[];
+  let cur=endId;
+  while(cur!==undefined){
+    const pos=nodePositions.get(cur);
+    if(pos) path.unshift({x:pos.x,z:pos.z});
+    cur=prev.get(cur);
+  }
+  return path.length>=2?path:null;
+}
+
+function getPositionAlongPath(path,t) {
+  if(!path||path.length<2) return null;
+  let total=0;
+  const segs=[];
+  for(let i=0;i<path.length-1;i++){
+    const d=Math.hypot(path[i+1].x-path[i].x,path[i+1].z-path[i].z);
+    segs.push(d); total+=d;
+  }
+  if(total<0.001) return path[0];
+  let target=t*total;
+  for(let i=0;i<segs.length;i++){
+    if(target<=segs[i]||i===segs.length-1){
+      const f=segs[i]>0?Math.min(target/segs[i],1):0;
+      return {x:path[i].x+(path[i+1].x-path[i].x)*f,
+              z:path[i].z+(path[i+1].z-path[i].z)*f};
+    }
+    target-=segs[i];
+  }
+  return path[path.length-1];
+}
+
+function buildRoutePaths() {
+  if(!nodePositions.size){routePaths=CONNS.map(()=>null);return;}
+  routePaths=CONNS.map(conn=>{
+    const sid=nearestStreetNode(conn.a.cx,conn.a.cz);
+    const eid=nearestStreetNode(conn.b.cx,conn.b.cz);
+    if(!sid||!eid||sid===eid) return null;
+    return dijkstra(sid,eid);
+  });
+  const found=routePaths.filter(Boolean).length;
+  console.log(`Routes: ${found}/${CONNS.length} via streets`);
+}
+
+/* ══════════════════════════════════════
+   OSM fetch (POST, multi-endpoint)
+══════════════════════════════════════ */
+function setLoadMsg(m){document.getElementById('load-msg').textContent=m;}
+
+async function fetchOSM() {
+  const q=`[out:json][timeout:40];
+(
+  way["building"](${BBOX});
+  way["highway"~"^(primary|secondary|tertiary|residential|service|pedestrian|footway|living_street)$"](${BBOX});
+  way["place"="square"](${BBOX});
+  way["highway"="pedestrian"]["area"="yes"](${BBOX});
+  way["landuse"="square"](${BBOX});
+  way["railway"~"^(rail|subway|tram|light_rail|narrow_gauge)$"](${BBOX});
+  way["landuse"~"^(forest|grass|meadow|park|recreation_ground|village_green|allotments|orchard|greenfield)$"](${BBOX});
+  way["leisure"~"^(park|garden|nature_reserve|common|pitch|playground)$"](${BBOX});
+  way["natural"~"^(wood|scrub|grassland|heath|wetland)$"](${BBOX});
+);
+out body;>;out skel qt;`;
+
+  for(const ep of ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter']){
+    try{
+      setLoadMsg(`Fetching from ${new URL(ep).hostname}…`);
+      const ctl=new AbortController();
+      const tid=setTimeout(()=>ctl.abort(),32000);
+      const res=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q),signal:ctl.signal});
+      clearTimeout(tid);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data=await res.json();
+      if(data?.elements?.length>0){console.log(`OSM: ${data.elements.length} elements from ${ep}`);return data;}
+      throw new Error('empty');
+    }catch(e){console.warn(ep,'failed:',e.message);}
+  }
+  return null;
+}
+
+/* ══════════════════════════════════════
+   OSM parse → geometry + street graph
+══════════════════════════════════════ */
+function parseOSM(data) {
+  if(!data) return [];
+  const nodes={};
+  data.elements.forEach(el=>{if(el.type==='node') nodes[el.id]=el;});
+
+  const bldGeos=[], stGeos=[], railMap=new Map();
+  const osmSquares=[];
+  const streetWayEls=[];
+  const greenGeos=[];
+
+  // Build street graph inline
+  streetGraph=new Map(); nodePositions=new Map();
+
+  data.elements.forEach(el=>{
+    if(el.type!=='way') return;
+    const tags=el.tags||{};
+    const pts=(el.nodes||[]).map(nid=>nodes[nid]?toLocal(nodes[nid].lat,nodes[nid].lon):null).filter(Boolean);
+    if(pts.length<2) return;
+
+    if(tags.building){
+      const g=makeBldGeo(pts,tags); if(g) bldGeos.push(g);
+    } else if(tags.railway&&!tags.area){
+      const type=tags.railway;
+      if(!railMap.has(type)) railMap.set(type,[]);
+      railMap.get(type).push(pts);
+    } else if(tags.highway&&!tags.area){
+      const g=makeStGeo(pts,tags.highway); if(g) stGeos.push(g);
+      // Build street graph
+      for(let i=0;i<el.nodes.length-1;i++){
+        const aid=el.nodes[i],bid=el.nodes[i+1];
+        const na=nodes[aid],nb=nodes[bid];
+        if(!na||!nb) continue;
+        const pa=toLocal(na.lat,na.lon),pb=toLocal(nb.lat,nb.lon);
+        const d=Math.hypot(pa.x-pb.x,pa.z-pb.z);
+        nodePositions.set(aid,pa); nodePositions.set(bid,pb);
+        if(!streetGraph.has(aid)) streetGraph.set(aid,[]);
+        if(!streetGraph.has(bid)) streetGraph.set(bid,[]);
+        streetGraph.get(aid).push({id:bid,d});
+        streetGraph.get(bid).push({id:aid,d});
+      }
+    } else if(tags.place==='square'||tags.landuse==='square'||(tags.highway==='pedestrian'&&tags.area==='yes')){
+      if(pts.length>=3){
+        const g=makeShapeFlat(pts,0.25);
+        if(g){const m=new THREE.Mesh(g,M_SQ);m.receiveShadow=true;G.phy.add(m);}
+        if(tags.name){
+          const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length;
+          const cz=pts.reduce((s,p)=>s+p.z,0)/pts.length;
+          osmSquares.push({id:'osm_'+el.id,label:tags.name,type:'plaza',cx,cz,bD:300,bW:20,bB:5,bF:55,c:0xe8a020});
+        }
+      }
+    } else if(pts.length>=3&&(
+        (tags.landuse&&['forest','grass','meadow','park','recreation_ground','village_green','allotments','orchard','greenfield'].includes(tags.landuse))||
+        (tags.leisure&&['park','garden','nature_reserve','common','pitch','playground'].includes(tags.leisure))||
+        (tags.natural&&['wood','scrub','grassland','heath','wetland'].includes(tags.natural))
+      )){
+      const g=makeShapeFlat(pts,0.10); if(g) greenGeos.push(g);
+    }
+  });
+
+  console.log(`Street graph: ${nodePositions.size} nodes`);
+
+  // Merge buildings in chunks
+  setLoadMsg(`Merging ${bldGeos.length} buildings…`);
+  const CHUNK=150;
+  for(let i=0;i<bldGeos.length;i+=CHUNK){
+    const chunk=bldGeos.slice(i,i+CHUNK);
+    chunk.forEach(g=>{if(!g.attributes.uv) g.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count*2),2));});
+    try{
+      const m=new THREE.Mesh(mergeGeometries(chunk),M_BLD);
+      m.castShadow=m.receiveShadow=true; G.phy.add(m);
+    }catch(e){ chunk.forEach(g=>{const m=new THREE.Mesh(g,M_BLD);m.castShadow=m.receiveShadow=true;G.phy.add(m);}); }
+  }
+
+  // Streets
+  if(stGeos.length){
+    try{const m=new THREE.Mesh(mergeGeometries(stGeos),M_ST);m.receiveShadow=true;G.phy.add(m);}
+    catch(e){stGeos.forEach(g=>G.phy.add(new THREE.Mesh(g,M_ST)));}
+  }
+
+  // Railways
+  const RAIL_COLORS={rail:0xdd3333,light_rail:0xff7744,narrow_gauge:0xcc5533,subway:0x3366ff,tram:0xddcc22};
+  railMap.forEach((ptsList,type)=>{
+    const color=RAIL_COLORS[type]||0xaaaaaa;
+    const railGeos=ptsList.map(pts=>makeRailRibbon(pts)).filter(Boolean);
+    if(!railGeos.length) return;
+    try{
+      const mat=new THREE.MeshBasicMaterial({color});
+      const m=new THREE.Mesh(mergeGeometries(railGeos),mat);
+      G.rail.add(m);
+    }catch(e){railGeos.forEach(g=>G.rail.add(new THREE.Mesh(g,new THREE.MeshBasicMaterial({color}))));}
+  });
+
+  // Green areas
+  if(greenGeos.length){
+    setLoadMsg(`Merging ${greenGeos.length} green areas…`);
+    while(G.green.children.length) G.green.remove(G.green.children[0]);
+    const GCHUNK=120;
+    for(let i=0;i<greenGeos.length;i+=GCHUNK){
+      const chunk=greenGeos.slice(i,i+GCHUNK);
+      chunk.forEach(g=>{if(!g.attributes.uv)g.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count*2),2));});
+      try{const m=new THREE.Mesh(mergeGeometries(chunk),M_GREEN);m.receiveShadow=true;G.green.add(m);}
+      catch(e){chunk.forEach(g=>{G.green.add(new THREE.Mesh(g,M_GREEN));});}
+    }
+    console.log(`Green cover: ${greenGeos.length} polygons`);
+  }
+
+  return osmSquares;
+}
+
+/* geometry helpers */
+function makeBldGeo(pts,tags){
+  if(pts.length<3) return null;
+  try{
+    const shape=new THREE.Shape();
+    shape.moveTo(pts[0].x,-pts[0].z);
+    for(let i=1;i<pts.length;i++) shape.lineTo(pts[i].x,-pts[i].z);
+    shape.closePath();
+    const lvl=Math.min(parseInt(tags['building:levels']||'3'),25);
+    const h=Math.max(4,lvl*3.2);
+    const geo=new THREE.ExtrudeGeometry(shape,{depth:h,bevelEnabled:false});
+    geo.rotateX(-Math.PI/2); return geo;
+  }catch(e){return null;}
+}
+function makeStGeo(pts,type){
+  const HW={primary:9,secondary:7,tertiary:5.5,residential:4,service:3,pedestrian:6,footway:2.5,living_street:4};
+  const hw=(HW[type]||4)/2; const pos=[];
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1],dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz);
+    if(len<0.01) continue;
+    const nx=-dz/len*hw,nz=dx/len*hw;
+    pos.push(a.x+nx,0.18,a.z+nz, b.x+nx,0.18,b.z+nz, a.x-nx,0.18,a.z-nz,
+             b.x+nx,0.18,b.z+nz, b.x-nx,0.18,b.z-nz, a.x-nx,0.18,a.z-nz);
+  }
+  if(!pos.length) return null;
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.computeVertexNormals(); return geo;
+}
+function makeRailRibbon(pts,w=1.5){
+  const hw=w/2; const pos=[];
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1],dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz);
+    if(len<0.01) continue;
+    const nx=-dz/len*hw,nz=dx/len*hw;
+    pos.push(a.x+nx,0.5,a.z+nz, b.x+nx,0.5,b.z+nz, a.x-nx,0.5,a.z-nz,
+             b.x+nx,0.5,b.z+nz, b.x-nx,0.5,b.z-nz, a.x-nx,0.5,a.z-nz);
+  }
+  if(!pos.length) return null;
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.computeVertexNormals(); return geo;
+}
+function makeShapeFlat(pts,y=0){
+  try{
+    const shape=new THREE.Shape();
+    shape.moveTo(pts[0].x,-pts[0].z);
+    for(let i=1;i<pts.length;i++) shape.lineTo(pts[i].x,-pts[i].z);
+    shape.closePath();
+    const geo=new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI/2); geo.translate(0,y,0); return geo;
+  }catch(e){return null;}
+}
+
+/* ══════════════════════════════════════
+   Place setup
+══════════════════════════════════════ */
+function generateFallbackPlaces(){
+  const offs=[[0,0,'City Center'],[-.004,.002,'West Square'],[.004,-.002,'East Square'],
+    [0,-.005,'North Plaza'],[.003,.004,'South Quarter'],[-.002,-.003,'Old Town'],
+    [.001,.006,'Market Area'],[-.005,.001,'Park Square']];
+  const bDs=[480,300,260,200,160,140,180,120], bWs=[38,22,18,14,10,9,14,8];
+  const bBs=[9,5,4,3,2,2,3,2], bFs=[84,55,45,35,25,22,38,20];
+  return offs.map((o,i)=>{
+    const {x,z}=toLocal(CLat+o[0],CLon+o[1]);
+    return {id:'gen_'+i,label:o[2],type:'plaza',cx:x,cz:z,
+      bD:bDs[i],bW:bWs[i],bB:bBs[i],bF:bFs[i],c:PLACE_COLORS[i%PLACE_COLORS.length]};
+  });
+}
+
+function setupPlaces(osmSq){
+  let places=[];
+  // Use Weimar fallback for Weimar
+  if(cityName==='Weimar'){
+    places=WEIMAR_FB.map(p=>{const{x,z}=toLocal(p.lat,p.lon);return{...p,cx:x,cz:z};});
+  }
+  // Merge OSM squares
+  osmSq.forEach((s,i)=>{
+    if(!places.find(p=>Math.hypot(p.cx-s.cx,p.cz-s.cz)<60)){
+      places.push({...s,
+        bD:[480,350,290,220,180,150,200,160][i]||200,
+        bW:[38,25,20,15,12,10,18,14][i]||15,
+        bB:[9,6,5,4,3,2,5,3][i]||4,
+        bF:[84,65,55,40,35,28,50,38][i]||45,
+        c:PLACE_COLORS[i%PLACE_COLORS.length]});
+    }
+  });
+  // Supplement with generated if too few
+  if(places.length<4){
+    const gen=generateFallbackPlaces();
+    gen.forEach(p=>{if(!places.find(q=>Math.hypot(q.cx-p.cx,q.cz-p.cz)<100)) places.push(p);});
+  }
+  PLACES=places.slice(0,10);
+
+  // Connections
+  CONNS=[];
+  const used=new Set();
+  PLACES.forEach((a,i)=>{
+    [...PLACES].map((b,j)=>({b,j,d:Math.hypot(b.cx-a.cx,b.cz-a.cz)}))
+      .filter(e=>e.j!==i).sort((p,q)=>p.d-q.d).slice(0,2)
+      .forEach(e=>{
+        const k=[i,e.j].sort().join('-');
+        if(!used.has(k)){used.add(k);CONNS.push({a,b:e.b});}
+      });
+  });
+
+  buildRoutePaths();
+  buildMarkers();
+  buildAbstractLayers();
+}
+
+/* ══════════════════════════════════════
+   Place markers
+══════════════════════════════════════ */
+const discGeo=new THREE.CylinderGeometry(10,10,1,24);
+function buildMarkers(){
+  while(G.mark.children.length) G.mark.remove(G.mark.children[0]);
+  placeLabels.forEach(l=>{if(l.parent)l.parent.remove(l);});
+  placeLabels=[];
+  PLACES.forEach(p=>{
+    const mat=new THREE.MeshLambertMaterial({color:p.c,emissive:p.c,emissiveIntensity:0.22});
+    const disc=new THREE.Mesh(discGeo,mat);
+    disc.position.set(p.cx,0.5,p.cz); disc.castShadow=true;
+    disc.userData.place=p; G.mark.add(disc);
+    const div=document.createElement('div');
+    div.className='place-label'; div.textContent=p.label;
+    const lbl=new CSS2DObject(div);
+    lbl.position.set(p.cx,25,p.cz); scene.add(lbl); placeLabels.push(lbl);
+  });
+}
+
+/* ══════════════════════════════════════
+   Abstract layers — setup
+══════════════════════════════════════ */
+const ringGeoBase=(()=>{const g=new THREE.RingGeometry(0.88,1,44);g.rotateX(-Math.PI/2);return g;})();
+const sphereGeoSm=new THREE.SphereGeometry(1.8,8,8);
+
+function buildAbstractLayers(){
+  [G.wifi,G.bt,G.flow,G.dwell,G.mem].forEach(g=>{while(g.children.length)g.remove(g.children[0]);});
+  wifiObjs=[];flowObjs=[];dwellObjs=[];memObjs=[];
+
+  // WiFi rings
+  PLACES.forEach(p=>{
+    const rings=[0,1,2].map(i=>{
+      const mat=new THREE.MeshBasicMaterial({color:0x50b4ff,transparent:true,opacity:0,side:THREE.DoubleSide});
+      const mesh=new THREE.Mesh(ringGeoBase,mat);
+      mesh.position.set(p.cx,2,p.cz); G.wifi.add(mesh);
+      return{mesh,phase:i/3};
+    });
+    wifiObjs.push({p,rings,ph:Math.random()});
+  });
+
+  // Flow paths — through streets
+  CONNS.forEach((conn,ci)=>{
+    const{a,b}=conn;
+    const path=routePaths[ci];
+    const points=path
+      ?path.map(pt=>new THREE.Vector3(pt.x,2,pt.z))
+      :[new THREE.Vector3(a.cx,2,a.cz),new THREE.Vector3(b.cx,2,b.cz)];
+    const lineMat=new THREE.LineBasicMaterial({color:0xff9046,transparent:true,opacity:0.25});
+    G.flow.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),lineMat));
+    const partMat=new THREE.MeshBasicMaterial({color:0xffa046,transparent:true});
+    const particle=new THREE.Mesh(sphereGeoSm,partMat);
+    G.flow.add(particle);
+    flowObjs.push({a,b,path,lineMat,particle,partMat,ci});
+  });
+
+  // Dwell bars
+  PLACES.forEach(p=>{
+    const mat=new THREE.MeshLambertMaterial({color:0x2db87a,transparent:true,opacity:0.85});
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(4,1,4),mat);
+    bar.position.set(p.cx+12,0,p.cz); G.dwell.add(bar);
+    dwellObjs.push({p,bar});
+  });
+
+  // Memory ripples
+  PLACES.forEach(p=>{
+    const mat=new THREE.MeshBasicMaterial({color:0xa05aff,transparent:true,opacity:0,side:THREE.DoubleSide});
+    const mesh=new THREE.Mesh(ringGeoBase,mat);
+    mesh.position.set(p.cx,0.8,p.cz); G.mem.add(mesh);
+    memObjs.push({p,mesh,ph:Math.random()});
+  });
+}
+
+/* ══════════════════════════════════════
+   Simulation
+══════════════════════════════════════ */
+function rebuild(){
+  const t=ts(hourN)*weatherActivityMod;
+  sim={};
+  PLACES.forEach(p=>{
+    const n=0.82+Math.random()*0.36;
+    sim[p.id]={dwell:Math.round(p.bD*t*n),wifi:Math.round(p.bW*t*n),
+      bt:Math.max(0,Math.round(p.bB*t*n)),flow:Math.round(p.bF*t*n)};
+  });
+  const pCount=Math.round(35*t);
+  people=[];
+  for(let i=0;i<pCount;i++){
+    const pl=PLACES[Math.floor(Math.random()*PLACES.length)];
+    people.push({id:pl.id,cx:pl.cx,cz:pl.cz,ox:rnd(-12,12),oz:rnd(-12,12),
+      hue:Math.random()*360,bt:Math.random()<0.3,song:SONGS[i%SONGS.length],
+      bp:Math.random()*6.28,ph:Math.random()*6.28});
+  }
+  rebuildPeople(); updStats(); updPlacePanel();
+}
+
+function rebuildPeople(){
+  while(G.ppl.children.length) G.ppl.remove(G.ppl.children[0]);
+  while(G.bt.children.length)  G.bt.remove(G.bt.children[0]);
+  btLabelNodes.forEach(n=>{if(n.parent)n.parent.remove(n);}); btLabelNodes=[];
+  pplObjs=[];
+  people.forEach(person=>{
+    const col=new THREE.Color().setHSL(person.hue/360,0.60,0.62);
+    const mat=new THREE.MeshLambertMaterial({color:col});
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,3.2,8),mat); body.position.y=1.6;
+    const head=new THREE.Mesh(new THREE.SphereGeometry(0.75,8,8),mat); head.position.y=3.8;
+    const grp=new THREE.Group(); grp.add(body,head);
+    grp.position.set(person.cx+person.ox,0,person.cz+person.oz); G.ppl.add(grp);
+    let btRing=null;
+    if(person.bt){
+      const bm=new THREE.MeshBasicMaterial({color:0xffd246,transparent:true,opacity:0,side:THREE.DoubleSide});
+      btRing=new THREE.Mesh(ringGeoBase,bm);
+      btRing.position.set(person.cx+person.ox,4.5,person.cz+person.oz); G.bt.add(btRing);
+      const div=document.createElement('div'); div.className='bt-label'; div.textContent=person.song;
+      const lbl=new CSS2DObject(div); lbl.position.set(0,5.8,0); grp.add(lbl); btLabelNodes.push(lbl);
+    }
+    pplObjs.push({person,grp,btRing});
+  });
+}
+
+/* ══════════════════════════════════════
+   Layer toggles
+══════════════════════════════════════ */
+const LAYER_CFG=[
+  {key:'phy',  label:'Physical',    color:'#c0b8a8',desc:'3D extruded buildings, streets and paved squares from OSM geometry.'},
+  {key:'green',label:'Green Cover', color:'#2aaa3a',desc:'Parks, forests, meadows and gardens from OSM. Colour changes with season — fresh green in spring, deep in summer, amber in autumn, muted in winter.'},
+  {key:'rail', label:'Rail & Metro',color:'#ff4466',desc:'Railway and metro lines: red = mainline rail, blue = subway/U-Bahn, yellow = tram. Sourced from OSM railway tags.'},
+  {key:'ppl',  label:'People',      color:'#88aaff',desc:'Simulated pedestrian population. Count scales with time-of-day curve and weather. Gold ring = active Bluetooth stream.'},
+  {key:'wifi', label:'WiFi rings',  color:'#50b4ff',desc:'Expanding blue rings show wireless device probe density. Larger rings = more devices detected. Intensity follows time of day.'},
+  {key:'bt',   label:'Bluetooth',   color:'#ffd246',desc:'Gold pulse rings on people with active audio streams. Floating labels show the artist being played. Personal & musical dimension.'},
+  {key:'flow', label:'Flow paths',  color:'#ff9046',desc:'Pedestrian routes between places, routed along real OSM streets via Dijkstra shortest-path. Particles travel the actual road network.'},
+  {key:'dwell',label:'Dwell bars',  color:'#2db87a',desc:'Green vertical bars above benches and plazas show average time people stay (dwell minutes). Taller bar = longer rest.'},
+  {key:'mem',  label:'Memory',      color:'#a05aff',desc:'Slow purple ripples encode cumulative historical presence. This layer represents the city\'s memory — where people have lingered over time.'},
+];
+const L=Object.fromEntries(LAYER_CFG.map(l=>[l.key,true]));
+
+function buildLayerUI(){
+  const el=document.getElementById('layers-list');
+  LAYER_CFG.forEach(cfg=>{
+    const div=document.createElement('div');
+    div.className='layer-row on'; div.id='lr-'+cfg.key; div.title=cfg.desc;
+    div.innerHTML=`<div class="l-dot" style="background:${cfg.color};flex-shrink:0"></div>`+
+      `<div style="flex:1;min-width:0"><span class="l-name" style="flex:unset;display:block">${cfg.label}</span>`+
+      `<span class="l-sub">${cfg.desc}</span></div>`+
+      `<div class="l-chk" style="flex-shrink:0"><svg width="9" height="7" viewBox="0 0 9 7" fill="none">`+
+      `<path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`+
+      `</svg></div>`;
+    div.onclick=()=>togLayer(cfg.key); el.appendChild(div);
+
+    // Building opacity sub-row
+    if(cfg.key==='phy'){
+      const row=document.createElement('div'); row.className='opacity-ctrl';
+      row.innerHTML=`<span class="opacity-lbl">Building opacity</span>`+
+        `<input type="range" id="bld-opacity" min="0" max="100" value="100">`+
+        `<span class="opacity-val" id="bld-opacity-val">100%</span>`;
+      el.appendChild(row);
+      setTimeout(()=>{
+        const sl=document.getElementById('bld-opacity');
+        sl.addEventListener('input',()=>{
+          const v=+sl.value;
+          document.getElementById('bld-opacity-val').textContent=v+'%';
+          M_BLD.transparent=v<100; M_BLD.opacity=v/100; M_BLD.needsUpdate=true;
+        });
+      },100);
+    }
+  });
+}
+function togLayer(k){
+  L[k]=!L[k];
+  document.getElementById('lr-'+k).className='layer-row'+(L[k]?' on':'');
+}
+
+/* ══════════════════════════════════════
+   Animate layers
+══════════════════════════════════════ */
+function animateLayers(){
+  G.phy.visible=L.phy; G.rail.visible=L.rail; G.green.visible=L.green;
+
+  // WiFi
+  G.wifi.visible=L.wifi;
+  if(L.wifi) wifiObjs.forEach(wo=>{
+    wo.ph=(wo.ph+0.009)%1;
+    const dens=Math.min(1,(sim[wo.p.id]?.wifi||0)/38);
+    wo.rings.forEach(r=>{
+      const ph=(wo.ph+r.phase)%1,radius=ph*55,al=(1-ph)*dens*0.65;
+      r.mesh.scale.set(radius,1,radius); r.mesh.material.opacity=al;
+    });
+  });
+
+  // Flow — through streets
+  G.flow.visible=L.flow;
+  if(L.flow) flowObjs.forEach(fo=>{
+    const str=Math.min(1,((sim[fo.a.id]?.flow||0)+(sim[fo.b.id]?.flow||0))/200);
+    fo.lineMat.opacity=str*0.24;
+    const ph=(frame*0.01+fo.ci*0.38)%1;
+    let pos;
+    if(fo.path&&fo.path.length>=2){
+      pos=getPositionAlongPath(fo.path,ph);
+    } else {
+      pos={x:fo.a.cx+(fo.b.cx-fo.a.cx)*ph,z:fo.a.cz+(fo.b.cz-fo.a.cz)*ph};
+    }
+    if(pos){fo.particle.position.set(pos.x,2,pos.z);}
+    fo.partMat.opacity=str*0.9;
+  });
+
+  // Dwell bars
+  G.dwell.visible=L.dwell;
+  if(L.dwell) dwellObjs.forEach(dwo=>{
+    const frac=Math.min(1,(sim[dwo.p.id]?.dwell||0)/550);
+    const h=Math.max(0.05,48*frac);
+    dwo.bar.scale.y=h; dwo.bar.position.y=h/2;
+  });
+
+  // Memory
+  G.mem.visible=L.mem;
+  if(L.mem) memObjs.forEach(mo=>{
+    mo.ph=(mo.ph+0.004)%1;
+    const dens=Math.min(1,(sim[mo.p.id]?.wifi||0)/38);
+    if(dens<0.1){mo.mesh.material.opacity=0;return;}
+    const r=mo.ph*48,al=(1-mo.ph)*dens*0.48;
+    mo.mesh.scale.set(r,1,r); mo.mesh.material.opacity=al;
+  });
+
+  // People
+  G.ppl.visible=L.ppl;
+  if(L.ppl) pplObjs.forEach(po=>{po.person.bp+=0.04;po.grp.position.y=Math.sin(po.person.bp)*0.5;});
+
+  // Bluetooth
+  G.bt.visible=L.bt;
+  if(L.bt) pplObjs.forEach(po=>{
+    if(!po.btRing) return;
+    po.person.ph+=0.03;
+    const ph=po.person.ph%1,r=2+ph*18,al=(1-ph)*0.58;
+    po.btRing.scale.set(r,1,r); po.btRing.material.opacity=al;
+  });
+}
+
+/* ══════════════════════════════════════
+   Stats + panel
+══════════════════════════════════════ */
+function updStats(){
+  if(!Object.keys(sim).length) return;
+  const tw=Object.values(sim).reduce((s,d)=>s+d.wifi,0);
+  const tb=Object.values(sim).reduce((s,d)=>s+d.bt,0);
+  const tf=Object.values(sim).reduce((s,d)=>s+d.flow,0);
+  const rest=PLACES.filter(p=>p.type!=='street');
+  const ad=rest.length?Math.round(rest.reduce((s,p)=>s+(sim[p.id]?.dwell||0),0)/rest.length):0;
+  const pk=PLACES.reduce((b,p)=>(sim[p.id]?.wifi||0)>(sim[b.id]?.wifi||0)?p:b,PLACES[0]);
+  document.getElementById('sp').textContent=people.length;
+  document.getElementById('sw').textContent=tw;
+  document.getElementById('sb2').textContent=tb;
+  document.getElementById('sd').textContent=Math.floor(ad/60)+'m';
+  document.getElementById('sfl').textContent=tf;
+  document.getElementById('sk').textContent=pk?.label||'—';
+}
+function updPlacePanel(){
+  const panel=document.getElementById('place-sec');
+  if(!sel){panel.style.display='none';return;}
+  panel.style.display='';
+  const d=sim[sel.id]||{};
+  document.getElementById('pl-dot').style.background='#'+sel.c.toString(16).padStart(6,'0');
+  document.getElementById('pl-name').textContent=sel.label;
+  document.getElementById('pl-type').textContent=sel.type;
+  document.getElementById('pl-type-desc').textContent=TYPE_DESC[sel.type]||'';
+  document.getElementById('ps-d').textContent=Math.floor((d.dwell||0)/60)+'m '+Math.round((d.dwell||0)%60)+'s';
+  document.getElementById('ps-w').textContent=(d.wifi||0)+' dev';
+  document.getElementById('ps-b').textContent=(d.bt||0)+' streams';
+  document.getElementById('ps-f').textContent=(d.flow||0)+' cross';
+}
+function deselect(){sel=null;updPlacePanel();}
+
+/* ══════════════════════════════════════
+   Activity graph
+══════════════════════════════════════ */
+function drawActivityGraph(){
+  const agCanvas=document.getElementById('ag');
+  const wrap=document.getElementById('ag-wrap');
+  const w=wrap.offsetWidth||264,h=36;
+  agCanvas.width=w;agCanvas.height=h;
+  const ac=agCanvas.getContext('2d');
+  ac.clearRect(0,0,w,h);
+  const pts=Array.from({length:24},(_,hh)=>({x:(hh/23)*(w-2)+1,y:h-5-ts(hh)*(h-9)}));
+  const grad=ac.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'rgba(80,180,255,0.22)');grad.addColorStop(1,'rgba(80,180,255,0.01)');
+  ac.beginPath();ac.moveTo(pts[0].x,h);pts.forEach(p=>ac.lineTo(p.x,p.y));
+  ac.lineTo(pts[pts.length-1].x,h);ac.closePath();ac.fillStyle=grad;ac.fill();
+  ac.beginPath();pts.forEach((p,i)=>i?ac.lineTo(p.x,p.y):ac.moveTo(p.x,p.y));
+  ac.strokeStyle='rgba(80,180,255,0.55)';ac.lineWidth=1.5;ac.stroke();
+  const mx=(hourN/23)*(w-2)+1,my=h-5-ts(hourN)*(h-9);
+  ac.beginPath();ac.arc(mx,my,3,0,Math.PI*2);ac.fillStyle='#fff';ac.fill();
+  ac.fillStyle='rgba(255,255,255,0.2)';ac.font='8px system-ui';
+  [0,6,12,18].forEach(hh=>{ac.textAlign=hh===0?'left':'center';ac.fillText(hh+'h',(hh/23)*(w-2)+1,h-1);});
+}
+
+/* ══════════════════════════════════════
+   Time control
+══════════════════════════════════════ */
+function setHour(h){
+  hourN=h;
+  document.getElementById('slt').value=h;
+  document.getElementById('time-big').textContent=String(h).padStart(2,'0')+':00';
+  document.getElementById('time-desc').textContent=timeDesc(h);
+  rebuild(); drawActivityGraph();
+}
+
+/* ══════════════════════════════════════
+   Auto-play
+══════════════════════════════════════ */
+let playing=false,playSpeed=1,playAcc=0;
+function togglePlay(){
+  playing=!playing;
+  const btn=document.getElementById('play-btn');
+  btn.innerHTML=playing?'&#9646;&#9646; Pause':'&#9654; Play';
+  btn.className='btn'+(playing?' active':'');
+}
+function setSpeed(s){
+  playSpeed=s;
+  ['slow','norm','fast'].forEach(id=>document.getElementById('sp-'+id).className='btn');
+  const map={0.5:'slow',1:'norm',2:'fast'};
+  document.getElementById('sp-'+map[s]).className='btn active';
+}
+
+/* ══════════════════════════════════════
+   City search
+══════════════════════════════════════ */
+function searchCity(){
+  const v=document.getElementById('city-input').value.trim();
+  if(v) loadCity(v);
+}
+
+async function loadCity(name){
+  document.getElementById('loading').style.display='flex';
+  setLoadMsg(`Searching ${name}…`);
+  try{
+    const res=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name+', Germany')}&format=json&limit=3&addressdetails=1`,{headers:{'Accept-Language':'en','User-Agent':'CityLayersApp/1.0'}});
+    const data=await res.json();
+    if(!data.length) throw new Error('City not found in Germany');
+    // Prefer city/town/village results
+    const result=data.find(d=>['city','town','village','municipality'].includes(d.addresstype||d.type))||data[0];
+    CLat=parseFloat(result.lat); CLon=parseFloat(result.lon);
+    LonM=111320*Math.cos(CLat*Math.PI/180);
+    BBOX=makeBBOX(CLat,CLon);
+    cityName=name;
+    document.getElementById('sb-title').textContent=name;
+    document.getElementById('city-input').value='';
+    // Reset camera
+    camera.position.set(0,650,700); controls.target.set(0,0,0); controls.update();
+    // Clear scene
+    clearScene();
+    const osmData=await fetchOSM();
+    setLoadMsg('Building 3D city…');
+    await new Promise(r=>setTimeout(r,60));
+    const osmSq=parseOSM(osmData);
+    setLoadMsg('Mapping places…');
+    await new Promise(r=>setTimeout(r,40));
+    setupPlaces(osmSq);
+    updateSeasonalColors();
+    setHour(hourN);
+    document.getElementById('loading').style.display='none';
+    document.getElementById('canvas-info').textContent=
+      osmData?`OSM loaded · ${G.phy.children.length} meshes · ${name} 2×2 km`
+             :`Fallback · ${name} 2×2 km`;
+  }catch(e){
+    setLoadMsg('Error: '+e.message);
+    setTimeout(()=>document.getElementById('loading').style.display='none',2500);
+  }
+}
+
+function clearScene(){
+  [G.phy,G.ppl,G.wifi,G.bt,G.flow,G.dwell,G.mem,G.mark,G.rail,G.green].forEach(g=>{
+    while(g.children.length) g.remove(g.children[0]);
+  });
+  if(G_precip){scene.remove(G_precip);G_precip=null;precipGeo=null;}
+  placeLabels.forEach(l=>{if(l.parent)l.parent.remove(l);}); placeLabels=[];
+  btLabelNodes.forEach(l=>{if(l.parent)l.parent.remove(l);}); btLabelNodes=[];
+  pplObjs=[];wifiObjs=[];flowObjs=[];dwellObjs=[];memObjs=[];
+  routePaths=[];streetGraph=new Map();nodePositions=new Map();
+  PLACES=[];CONNS=[];sim={};people=[];
+}
+
+/* ══════════════════════════════════════
+   Raycasting
+══════════════════════════════════════ */
+const raycaster=new THREE.Raycaster();
+const mouse2d=new THREE.Vector2();
+
+renderer.domElement.addEventListener('mousemove',e=>{
+  const r=renderer.domElement.getBoundingClientRect();
+  mouse2d.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
+  raycaster.setFromCamera(mouse2d,camera);
+  const hits=raycaster.intersectObjects(G.mark.children);
+  const tip=document.getElementById('tip');
+  if(hits.length){
+    const p=hits[0].object.userData.place;
+    if(p){
+      const d=sim[p.id]||{};
+      document.getElementById('tip-name').textContent=p.label;
+      document.getElementById('tip-type').textContent=p.type;
+      document.getElementById('td').textContent=Math.floor((d.dwell||0)/60)+'m '+Math.round((d.dwell||0)%60)+'s';
+      document.getElementById('tw').textContent=(d.wifi||0)+' devices';
+      document.getElementById('tb2').textContent=(d.bt||0)+' streams';
+      document.getElementById('tf').textContent=(d.flow||0)+' crossings';
+      tip.style.display='block';
+      tip.style.left=Math.min(e.clientX-r.left+14,r.width-168)+'px';
+      tip.style.top=Math.max(e.clientY-r.top-90,4)+'px';
+      renderer.domElement.style.cursor='pointer';
+    }
+  } else {tip.style.display='none';renderer.domElement.style.cursor='default';}
+});
+renderer.domElement.addEventListener('mouseleave',()=>document.getElementById('tip').style.display='none');
+renderer.domElement.addEventListener('click',e=>{
+  const r=renderer.domElement.getBoundingClientRect();
+  mouse2d.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
+  raycaster.setFromCamera(mouse2d,camera);
+  const hits=raycaster.intersectObjects(G.mark.children);
+  if(hits.length){const p=hits[0].object.userData.place;sel=(p&&p!==sel)?p:null;}
+  else sel=null;
+  updPlacePanel();
+});
+
+/* ══════════════════════════════════════
+   Resize
+══════════════════════════════════════ */
+function rsz(){
+  const r=areaEl.getBoundingClientRect();
+  renderer.setSize(r.width,r.height); css2d.setSize(r.width,r.height);
+  camera.aspect=r.width/r.height; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',rsz); rsz();
+
+/* ══════════════════════════════════════
+   Keyboard
+══════════════════════════════════════ */
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT') return;
+  if(e.key===' '){e.preventDefault();togglePlay();}
+  if(e.key==='ArrowRight') setHour(Math.min(23,hourN+1));
+  if(e.key==='ArrowLeft')  setHour(Math.max(0,hourN-1));
+  if(e.key==='Escape') deselect();
+});
+
+/* ══════════════════════════════════════
+   Utilities (global for inline handlers)
+══════════════════════════════════════ */
+function resetCamera(){camera.position.set(0,650,700);controls.target.set(0,0,0);controls.update();deselect();}
+function screenshot(){
+  renderer.render(scene,camera);
+  const a=document.createElement('a');
+  a.download=`${cityName.toLowerCase()}-city-${String(hourN).padStart(2,'0')}h.png`;
+  a.href=renderer.domElement.toDataURL('image/png'); a.click();
+}
+window.setHour=setHour;window.togglePlay=togglePlay;window.setSpeed=setSpeed;
+window.resetCamera=resetCamera;window.screenshot=screenshot;
+window.deselect=deselect;window.searchCity=searchCity;window.loadCity=loadCity;
+window.calNav=calNav;window.setWeather=setWeather;window.setSeason=setSeason;
+
+/* ══════════════════════════════════════
+   Render loop
+══════════════════════════════════════ */
+let lastTS=0,fpsAcc=0,fpsFrames=0;
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt=now-lastTS;lastTS=now;
+  fpsAcc+=dt;fpsFrames++;
+  if(fpsAcc>1000){
+    const fps=Math.round(fpsFrames*1000/fpsAcc);fpsAcc=0;fpsFrames=0;
+    document.getElementById('canvas-info').textContent=fps+` fps · ${cityName} 2×2 km`;
+  }
+  if(playing){
+    playAcc+=dt*playSpeed/2000;
+    if(playAcc>=1){playAcc=0;setHour((hourN+1)%24);}
+  }
+  frame++;
+  controls.update(); animateLayers(); animatePrecip();
+  renderer.render(scene,camera);
+  if(L.bt) css2d.render(scene,camera);
+}
+
+/* ══════════════════════════════════════
+   Init
+══════════════════════════════════════ */
+async function init(){
+  buildLayerUI();
+  renderCalendar();
+  drawActivityGraph();
+  updateTimeDisplay();
+  updateSeasonUI();
+  // Default sunny weather chip highlighted
+  const el=document.getElementById('wx-sunny'); if(el) el.classList.add('active');
+
+  setLoadMsg('Fetching Weimar OSM data…');
+  const osmData=await fetchOSM();
+  setLoadMsg('Building 3D city…');
+  await new Promise(r=>setTimeout(r,60));
+  const osmSq=parseOSM(osmData);
+  setLoadMsg('Mapping places & routing…');
+  await new Promise(r=>setTimeout(r,40));
+  setupPlaces(osmSq);
+  updateSeasonalColors();
+  setHour(13);
+  document.getElementById('loading').style.display='none';
+  document.getElementById('canvas-info').textContent=
+    osmData?`OSM loaded · ${G.phy.children.length} meshes · Weimar 2×2 km`
+           :`Fallback mode · Weimar 2×2 km`;
+  requestAnimationFrame(loop);
+}
+
+// ── Deferred startup: cover page picks city, then calls window.startCity ──
+buildLayerUI();
+renderCalendar();
+drawActivityGraph();
+updateTimeDisplay();
+updateSeasonUI();
+(()=>{const e=document.getElementById('wx-sunny');if(e)e.classList.add('active');})();
+requestAnimationFrame(loop); // render loop starts immediately (empty scene)
+
+// Called by cover page when user selects a city
+window.startCity = async function(name){
+  await loadCity(name||'Weimar');
+};
+</script>
+
+<!-- ══════════════════════════════════════════════════
+     COVER PAGE SCRIPT — Globe renderer
+══════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+const DEG=Math.PI/180;
+const gcv=document.getElementById('gcv');
+const loadEl=document.getElementById('cov-load');
+const loadMsg=document.getElementById('cov-load-msg');
+const hintEl=document.getElementById('cov-hint');
+const cityEl=document.getElementById('cov-city');
+const taglineEl=document.getElementById('cov-tagline');
+
+/* ── Globe state ── */
+let gLat=50,gLon=10,gScale=0;
+let tLat=50,tLon=10,tScale=0;
+let dragging=false,dX0=0,dY0=0,lat0=50,lon0=10;
+let W=0,H=0,globeReady=false,coverClosed=false;
+let hovCity=null,selCity=null,rafId=null;
+
+/* ── Star field ── */
+const STARS=Array.from({length:300},()=>({
+  x:Math.random(),y:Math.random(),
+  r:Math.random()*1.6+0.2,
+  a:Math.random()*0.45+0.05,
+  tw:Math.random()*5+1.5
+}));
+
+/* ── German cities ── */
+const CITIES=[
+  {n:'Berlin',       la:52.520,lo:13.405,pop:'3.7 M',st:'Berlin',        big:true},
+  {n:'Hamburg',      la:53.551,lo:10.000,pop:'1.9 M',st:'Hamburg',       big:true},
+  {n:'München',      la:48.135,lo:11.582,pop:'1.5 M',st:'Bayern',        big:true},
+  {n:'Köln',         la:50.938,lo:6.960, pop:'1.1 M',st:'NRW',           big:true},
+  {n:'Frankfurt',    la:50.110,lo:8.682, pop:'763 K', st:'Hessen',        big:true},
+  {n:'Stuttgart',    la:48.775,lo:9.182, pop:'634 K', st:'Baden-W.',      big:true},
+  {n:'Düsseldorf',   la:51.225,lo:6.775, pop:'619 K', st:'NRW',          big:false},
+  {n:'Leipzig',      la:51.340,lo:12.374,pop:'610 K', st:'Sachsen',       big:false},
+  {n:'Dortmund',     la:51.514,lo:7.468, pop:'588 K', st:'NRW',          big:false},
+  {n:'Essen',        la:51.455,lo:7.012, pop:'583 K', st:'NRW',          big:false},
+  {n:'Bremen',       la:53.079,lo:8.801, pop:'569 K', st:'Bremen',        big:false},
+  {n:'Dresden',      la:51.050,lo:13.737,pop:'556 K', st:'Sachsen',       big:false},
+  {n:'Hannover',     la:52.375,lo:9.735, pop:'535 K', st:'Niedersachsen', big:false},
+  {n:'Nürnberg',     la:49.452,lo:11.077,pop:'515 K', st:'Bayern',        big:false},
+  {n:'Duisburg',     la:51.435,lo:6.762, pop:'498 K', st:'NRW',          big:false},
+  {n:'Bochum',       la:51.481,lo:7.219, pop:'365 K', st:'NRW',          big:false},
+  {n:'Bonn',         la:50.733,lo:7.099, pop:'329 K', st:'NRW',          big:false},
+  {n:'Münster',      la:51.960,lo:7.626, pop:'314 K', st:'NRW',          big:false},
+  {n:'Augsburg',     la:48.370,lo:10.898,pop:'295 K', st:'Bayern',        big:false},
+  {n:'Karlsruhe',    la:49.007,lo:8.404, pop:'307 K', st:'Baden-W.',      big:false},
+  {n:'Wiesbaden',    la:50.082,lo:8.244, pop:'278 K', st:'Hessen',        big:false},
+  {n:'Bielefeld',    la:52.021,lo:8.532, pop:'333 K', st:'NRW',          big:false},
+  {n:'Kiel',         la:54.323,lo:10.139,pop:'246 K', st:'Schleswig-H.',  big:false},
+  {n:'Aachen',       la:50.776,lo:6.084, pop:'248 K', st:'NRW',          big:false},
+  {n:'Chemnitz',     la:50.833,lo:12.917,pop:'245 K', st:'Sachsen',       big:false},
+  {n:'Freiburg',     la:47.997,lo:7.842, pop:'232 K', st:'Baden-W.',      big:false},
+  {n:'Erfurt',       la:50.978,lo:11.029,pop:'213 K', st:'Thüringen',     big:false},
+  {n:'Rostock',      la:54.092,lo:12.099,pop:'209 K', st:'Mecklenburg',   big:false},
+  {n:'Mainz',        la:49.998,lo:8.271, pop:'218 K', st:'Rheinland-P.',  big:false},
+  {n:'Potsdam',      la:52.396,lo:13.058,pop:'177 K', st:'Brandenburg',   big:false},
+  {n:'Oldenburg',    la:53.143,lo:8.214, pop:'169 K', st:'Niedersachsen', big:false},
+  {n:'Heidelberg',   la:49.399,lo:8.673, pop:'158 K', st:'Baden-W.',      big:false},
+  {n:'Darmstadt',    la:49.872,lo:8.651, pop:'158 K', st:'Hessen',        big:false},
+  {n:'Regensburg',   la:49.013,lo:12.101,pop:'152 K', st:'Bayern',        big:false},
+  {n:'Magdeburg',    la:52.120,lo:11.627,pop:'238 K', st:'Sachsen-Anhalt',big:false},
+  {n:'Würzburg',     la:49.793,lo:9.930, pop:'128 K', st:'Bayern',        big:false},
+  {n:'Ulm',          la:48.399,lo:9.991, pop:'126 K', st:'Baden-W.',      big:false},
+  {n:'Weimar',       la:50.979,lo:11.323,pop:'65 K',  st:'Thüringen',     big:false},
+  {n:'Saarbrücken',  la:49.234,lo:6.993, pop:'178 K', st:'Saarland',      big:false},
+  {n:'Kassel',       la:51.316,lo:9.499, pop:'201 K', st:'Hessen',        big:false},
+  {n:'Braunschweig', la:52.269,lo:10.522,pop:'249 K', st:'Niedersachsen', big:false},
+  {n:'Mannheim',     la:49.490,lo:8.466, pop:'309 K', st:'Baden-W.',      big:false},
+  {n:'Halle',        la:51.483,lo:11.970,pop:'239 K', st:'Sachsen-Anhalt',big:false},
+  {n:'Osnabrück',    la:52.279,lo:8.047, pop:'165 K', st:'Niedersachsen', big:false},
+  {n:'Paderborn',    la:51.718,lo:8.752, pop:'150 K', st:'NRW',          big:false},
+  {n:'Trier',        la:49.749,lo:6.637, pop:'115 K', st:'Rheinland-P.',  big:false},
+  {n:'Jena',         la:50.927,lo:11.586,pop:'108 K', st:'Thüringen',     big:false},
+  {n:'Lübeck',       la:53.869,lo:10.687,pop:'216 K', st:'Schleswig-H.',  big:false},
+  {n:'Flensburg',    la:54.792,lo:9.432, pop:'90 K',  st:'Schleswig-H.',  big:false},
+  {n:'Bamberg',      la:49.898,lo:10.896,pop:'77 K',  st:'Bayern',        big:false},
+  {n:'Bayreuth',     la:49.945,lo:11.578,pop:'73 K',  st:'Bayern',        big:false},
+];
+
+/* ── ISO 3166-1 numeric → country display name ── */
+const CN={
+  '004':'Afghanistan','008':'Albania','012':'Algeria','024':'Angola',
+  '032':'Argentina','036':'Australia','040':'Austria','050':'Bangladesh',
+  '056':'Belgium','068':'Bolivia','076':'Brazil','100':'Bulgaria',
+  '104':'Myanmar','116':'Cambodia','120':'Cameroon','124':'Canada',
+  '144':'Sri Lanka','152':'Chile','156':'China','170':'Colombia',
+  '180':'D.R. Congo','191':'Croatia','203':'Czechia','208':'Denmark',
+  '218':'Ecuador','818':'Egypt','231':'Ethiopia','246':'Finland',
+  '250':'France','276':'Germany','288':'Ghana','300':'Greece',
+  '320':'Guatemala','340':'Honduras','348':'Hungary','356':'India',
+  '360':'Indonesia','364':'Iran','368':'Iraq','372':'Ireland',
+  '376':'Israel','380':'Italy','392':'Japan','398':'Kazakhstan',
+  '404':'Kenya','410':'S. Korea','422':'Lebanon','434':'Libya',
+  '484':'Mexico','504':'Morocco','508':'Mozambique','528':'Netherlands',
+  '554':'New Zealand','566':'Nigeria','578':'Norway','586':'Pakistan',
+  '604':'Peru','608':'Philippines','616':'Poland','620':'Portugal',
+  '630':'Puerto Rico','642':'Romania','643':'Russia','682':'Saudi Arabia',
+  '686':'Senegal','703':'Slovakia','710':'S. Africa','724':'Spain',
+  '729':'Sudan','752':'Sweden','756':'Switzerland','760':'Syria',
+  '764':'Thailand','788':'Tunisia','792':'Turkey','804':'Ukraine',
+  '826':'United Kingdom','840':'United States','858':'Uruguay',
+  '862':'Venezuela','704':'Vietnam','887':'Yemen','716':'Zimbabwe',
+  '496':'Mongolia','400':'Jordan','388':'Jamaica','694':'Sierra Leone',
+};
+
+/* ── Topojson minimal decoder ── */
+function decodeTopo(topo){
+  const{scale,translate}=topo.transform;
+  const arcs=topo.arcs.map(arc=>{
+    let x=0,y=0;
+    return arc.map(d=>{x+=d[0];y+=d[1];
+      return[x*scale[0]+translate[0],y*scale[1]+translate[1]];});
+  });
+  function ga(i){return i>=0?arcs[i]:[...arcs[~i]].reverse();}
+  function rings(refs){return refs.map(r=>r.flatMap(i=>ga(i)));}
+  return topo.objects.countries.geometries.map(g=>({
+    id:String(g.id).padStart(3,'0'),
+    type:g.type,
+    arcs:g.type==='Polygon'?rings(g.arcs):g.arcs.map(rings)
+  }));
+}
+
+/* ── Orthographic projection ── */
+function proj(lat,lon){
+  const phi=lat*DEG,lam=lon*DEG,phi0=gLat*DEG,lam0=gLon*DEG;
+  const cosc=Math.sin(phi0)*Math.sin(phi)+Math.cos(phi0)*Math.cos(phi)*Math.cos(lam-lam0);
+  if(cosc<-0.01) return null;
+  return{
+    x:W*.5+gScale*Math.cos(phi)*Math.sin(lam-lam0),
+    y:H*.5-gScale*(Math.cos(phi0)*Math.sin(phi)-Math.sin(phi0)*Math.cos(phi)*Math.cos(lam-lam0)),
+    v:cosc
+  };
+}
+
+/* ── Country meta (centroids + names) ── */
+let countries=[],countryMeta=[];
+function buildMeta(){
+  countryMeta=[];
+  countries.forEach(c=>{
+    const name=CN[c.id]; if(!name) return;
+    const polys=c.type==='Polygon'?[c.arcs]:c.arcs;
+    const ring=polys[0]&&polys[0][0];if(!ring||!ring.length) return;
+    let sx=0,sy=0,n=0;
+    ring.forEach(([lo,la])=>{sx+=lo;sy+=la;n++;});
+    if(n) countryMeta.push({id:c.id,name,lat:sy/n,lon:sx/n});
+  });
+}
+
+/* ── Draw polygon rings ── */
+function drawRings(ctx,polys,firstOnly){
+  polys.forEach(poly=>{
+    if(!poly[0]) return;
+    const ring=firstOnly?[poly[0]]:poly;
+    ring.forEach(r=>{
+      let mv=false;
+      r.forEach(([lo,la])=>{
+        const p=proj(la,lo);
+        if(!p||p.v<0){mv=false;return;}
+        mv?ctx.lineTo(p.x,p.y):(ctx.moveTo(p.x,p.y),mv=true);
+      });
+      if(mv)ctx.closePath();
+    });
+  });
+}
+
+/* ── Main render loop ── */
+function renderFrame(){
+  if(coverClosed)return;
+  rafId=requestAnimationFrame(renderFrame);
+  const t=performance.now()/1000;
+
+  /* smooth easing */
+  gLat+=(tLat-gLat)*0.072;
+  gLon+=(tLon-gLon)*0.072;
+  gScale+=(tScale-gScale)*0.062;
+
+  const ctx=gcv.getContext('2d');
+  const cx=W*.5,cy=H*.5;
+
+  /* background */
+  ctx.fillStyle='#020508';ctx.fillRect(0,0,W,H);
+
+  /* stars */
+  STARS.forEach(s=>{
+    const a=s.a*(0.55+0.45*Math.sin(t*s.tw+s.x*18));
+    ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r,0,6.283);
+    ctx.fillStyle=`rgba(215,232,255,${a})`;ctx.fill();
+  });
+
+  if(!countries.length){return;}
+
+  /* atmosphere halo */
+  const atm=ctx.createRadialGradient(cx,cy-gScale*.06,gScale*.82,cx,cy,gScale*1.2);
+  atm.addColorStop(0,'rgba(10,30,70,0)');
+  atm.addColorStop(0.75,'rgba(8,22,55,0.08)');
+  atm.addColorStop(1,'rgba(30,80,180,0.22)');
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,gScale*1.2,0,6.283);
+  ctx.fillStyle=atm;ctx.fill();ctx.restore();
+
+  /* ── globe clip ── */
+  ctx.save();
+  ctx.beginPath();ctx.arc(cx,cy,gScale,0,6.283);ctx.clip();
+
+  /* ocean */
+  const oc=ctx.createRadialGradient(cx-gScale*.22,cy-gScale*.28,0,cx,cy,gScale);
+  oc.addColorStop(0,'#0d1f42');oc.addColorStop(0.65,'#091530');oc.addColorStop(1,'#060f20');
+  ctx.fillStyle=oc;ctx.fillRect(0,0,W,H);
+
+  /* all non-DE countries */
+  countries.forEach(c=>{
+    if(c.id==='276')return;
+    const polys=c.type==='Polygon'?[c.arcs]:c.arcs;
+    ctx.beginPath();drawRings(ctx,polys,true);
+    ctx.fillStyle='rgba(255,255,255,0.025)';ctx.fill();
+    ctx.strokeStyle='rgba(180,215,255,0.1)';ctx.lineWidth=0.55;ctx.stroke();
+  });
+
+  /* Germany — neon glow */
+  const de=countries.find(c=>c.id==='276');
+  if(de){
+    const polys=de.type==='Polygon'?[de.arcs]:de.arcs;
+    /* fill */
+    ctx.beginPath();drawRings(ctx,polys,false);
+    ctx.fillStyle='rgba(110,185,255,0.07)';ctx.fill();
+    /* inner glow stroke */
+    ctx.save();
+    ctx.beginPath();drawRings(ctx,polys,false);
+    ctx.shadowColor='rgba(90,175,255,0.95)';ctx.shadowBlur=16;
+    ctx.strokeStyle='rgba(200,232,255,0.92)';ctx.lineWidth=1.7;ctx.stroke();
+    /* outer glow */
+    ctx.shadowBlur=32;ctx.stroke();
+    ctx.restore();
+  }
+
+  /* globe shadow (night side) */
+  const sh=ctx.createRadialGradient(cx+gScale*.38,cy+gScale*.42,0,cx+gScale*.38,cy+gScale*.42,gScale*.95);
+  sh.addColorStop(0,'rgba(0,0,10,0.42)');sh.addColorStop(1,'rgba(0,0,10,0)');
+  ctx.fillStyle=sh;ctx.fillRect(0,0,W,H);
+
+  ctx.restore(); /* end globe clip */
+
+  /* globe rim */
+  ctx.save();
+  ctx.beginPath();ctx.arc(cx,cy,gScale,0,6.283);
+  const rim=ctx.createLinearGradient(cx-gScale,cy,cx+gScale,cy);
+  rim.addColorStop(0,'rgba(80,145,255,0.28)');
+  rim.addColorStop(.5,'rgba(120,185,255,0.06)');
+  rim.addColorStop(1,'rgba(80,145,255,0.28)');
+  ctx.strokeStyle=rim;ctx.lineWidth=1.4;ctx.stroke();ctx.restore();
+
+  /* ── country names ── */
+  ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
+  const bigOnly=gScale<350;
+  countryMeta.forEach(m=>{
+    if(bigOnly&&!['840','643','156','356','076','036','276'].includes(m.id))return;
+    const p=proj(m.lat,m.lon);if(!p||p.v<0.12)return;
+    const isDE=m.id==='276';
+    ctx.font=isDE?'bold 12px system-ui':'9px system-ui';
+    ctx.fillStyle=isDE?'rgba(205,235,255,0.88)':'rgba(255,255,255,0.19)';
+    if(isDE){ctx.shadowColor='rgba(90,175,255,0.85)';ctx.shadowBlur=10;}
+    else ctx.shadowBlur=0;
+    ctx.fillText(m.name,p.x,p.y);ctx.shadowBlur=0;
+  });
+  ctx.restore();
+
+  /* ── cities (when zoomed in) ── */
+  const showCities=gScale>620;
+  const showSmall=gScale>1050;
+  const showLabels=gScale>920;
+  if(showCities){
+    CITIES.forEach(c=>{
+      if(!showSmall&&!c.big)return;
+      const p=proj(c.la,c.lo);if(!p||p.v<0.08)return;
+      const isHov=hovCity===c;
+      const r=isHov?5:c.big?3.8:2.6;
+      /* hover pulse ring */
+      if(isHov){
+        const pulse=0.5+0.5*Math.sin(t*5);
+        ctx.save();ctx.beginPath();ctx.arc(p.x,p.y,r+5+pulse*5,0,6.283);
+        ctx.strokeStyle=`rgba(80,180,255,${0.38-pulse*0.22})`;
+        ctx.lineWidth=1.2;ctx.stroke();ctx.restore();
+      }
+      /* dot */
+      ctx.save();ctx.beginPath();ctx.arc(p.x,p.y,r,0,6.283);
+      if(isHov){ctx.shadowColor='rgba(80,180,255,0.95)';ctx.shadowBlur=14;ctx.fillStyle='#a2d8ff';}
+      else ctx.fillStyle=c.big?'rgba(200,232,255,0.88)':'rgba(155,198,240,0.62)';
+      ctx.fill();ctx.restore();
+      /* label */
+      if(showLabels||isHov){
+        ctx.save();ctx.textAlign='center';ctx.textBaseline='top';
+        ctx.font=isHov?'bold 11px system-ui':c.big?'10px system-ui':'9px system-ui';
+        ctx.fillStyle=isHov?'rgba(185,228,255,0.96)':'rgba(190,222,255,0.74)';
+        if(isHov){ctx.shadowColor='rgba(80,180,255,0.75)';ctx.shadowBlur=7;}
+        ctx.fillText(c.n,p.x,p.y+r+3);ctx.restore();
+      }
+    });
+  }
+
+  /* update hint / zoom label */
+  if(globeReady){
+    const zlbl=document.getElementById('cov-zlbl');
+    if(zlbl){
+      if(gScale<650) zlbl.textContent='Global view — scroll to zoom';
+      else if(gScale<1200) zlbl.textContent='European view';
+      else zlbl.textContent='Germany — click a city';
+    }
+  }
+}
+
+/* ── City hover / click ── */
+function cityAt(ex,ey){
+  if(gScale<620) return null;
+  for(const c of CITIES){
+    if(!c.big&&gScale<1050) continue;
+    const p=proj(c.la,c.lo);if(!p) continue;
+    if(Math.hypot(p.x-ex,p.y-ey)<=15) return c;
+  }
+  return null;
+}
+
+function showPanel(c){
+  selCity=c;
+  document.getElementById('cc-name').textContent=c.n;
+  document.getElementById('cc-meta').textContent=c.st+' · Germany';
+  document.getElementById('cc-pop').textContent='Population: '+c.pop;
+  cityEl.style.display='block';
+  if(taglineEl) taglineEl.style.opacity='0';
+}
+function hidePanel(){
+  cityEl.style.display='none';
+  selCity=null;
+  if(taglineEl) taglineEl.style.opacity='1';
+}
+
+/* ── Entry / exit ── */
+window.enterCity=function(){if(selCity)_doEnter(selCity.n);};
+window.skipIntro=function(){_doEnter('Weimar');};
+function _doEnter(cityName){
+  if(coverClosed)return;
+  coverClosed=true;
+  cancelAnimationFrame(rafId);
+  const cov=document.getElementById('cover');
+  cov.style.opacity='0';
+  setTimeout(()=>{
+    if(window.startCity) window.startCity(cityName);
+    else if(window.loadCity) window.loadCity(cityName);
+  },350);
+  setTimeout(()=>{cov.style.display='none';},1200);
+}
+
+/* ── Mouse events ── */
+gcv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const f=e.deltaY>0?0.875:1.145;
+  tScale=Math.max(160,Math.min(6000,tScale*f));
+  if(tScale<620) hidePanel();
+},{passive:false});
+
+gcv.addEventListener('mousedown',e=>{
+  dragging=true;dX0=e.clientX;dY0=e.clientY;lat0=tLat;lon0=tLon;
+  gcv.style.cursor='grabbing';
+});
+window.addEventListener('mouseup',()=>{dragging=false;gcv.style.cursor='grab';});
+window.addEventListener('mousemove',e=>{
+  if(dragging){
+    tLon=lon0+(e.clientX-dX0)/gScale*52;
+    tLat=Math.max(-82,Math.min(82,lat0-(e.clientY-dY0)/gScale*52));
+    if(gScale<620) hidePanel();
+  } else {
+    const c=cityAt(e.clientX,e.clientY);
+    if(c!==hovCity){hovCity=c;gcv.style.cursor=c?'pointer':'grab';}
+  }
+});
+gcv.addEventListener('click',e=>{
+  if(Math.hypot(e.clientX-dX0,e.clientY-dY0)>5) return; /* was a drag */
+  if(cityEl.contains(e.target)) return;
+  const c=cityAt(e.clientX,e.clientY);
+  if(c){
+    showPanel(c);
+    tLat=c.la;tLon=c.lo;
+    tScale=Math.min(Math.max(tScale,1200),3500);
+  } else {
+    hidePanel();
+  }
+});
+gcv.addEventListener('dblclick',e=>{
+  const c=cityAt(e.clientX,e.clientY);
+  if(c){showPanel(c);setTimeout(()=>_doEnter(c.n),120);}
+});
+
+/* ── Touch events ── */
+let lastPinch=0;
+gcv.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  if(e.touches.length===1){
+    dragging=true;dX0=e.touches[0].clientX;dY0=e.touches[0].clientY;lat0=tLat;lon0=tLon;
+  } else if(e.touches.length===2){
+    lastPinch=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+                         e.touches[0].clientY-e.touches[1].clientY);
+  }
+},{passive:false});
+gcv.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  if(e.touches.length===1&&dragging){
+    tLon=lon0+(e.touches[0].clientX-dX0)/gScale*52;
+    tLat=Math.max(-82,Math.min(82,lat0-(e.touches[0].clientY-dY0)/gScale*52));
+  } else if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+                       e.touches[0].clientY-e.touches[1].clientY);
+    tScale=Math.max(160,Math.min(6000,tScale*(d/lastPinch)));lastPinch=d;
+  }
+},{passive:false});
+gcv.addEventListener('touchend',()=>{dragging=false;});
+
+/* ── Resize ── */
+function resize(){
+  W=gcv.width=window.innerWidth;
+  H=gcv.height=window.innerHeight;
+  if(!globeReady){const s=Math.min(W,H)*0.34;gScale=tScale=s;}
+}
+window.addEventListener('resize',resize);
+
+/* ── Load world topojson ── */
+async function loadWorld(){
+  try{
+    loadMsg.textContent='Fetching world map…';
+    const r=await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const topo=await r.json();
+    loadMsg.textContent='Rendering globe…';
+    await new Promise(res=>setTimeout(res,20));
+    countries=decodeTopo(topo);
+    buildMeta();
+    loadEl.classList.add('done');
+    hintEl.style.display='block';
+    globeReady=true;
+  }catch(err){
+    console.warn('Globe load error:',err);
+    loadMsg.textContent='Map unavailable — click to continue';
+    loadEl.style.pointerEvents='auto';
+    loadEl.style.cursor='pointer';
+    loadEl.onclick=()=>_doEnter('Weimar');
+  }
+}
+
+/* ── Bootstrap ── */
+resize();
+renderFrame();
+loadWorld();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Comic of Urban Life</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+
+/* ══════════════════════════════════════════════
+   RESET + TOKENS
+══════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cream:#f5f0e6;
+  --ink:#101010;
+  --pink:#ff2d78;
+  --yellow:#ffe600;
+  --cyan:#00d4e0;
+  --blue:#1a4aff;
+  --green:#00b85a;
+  --street:#bfb8ae;
+  --street-stroke:#8a8278;
+  --bld-a:#d2cbe8;  /* lavender */
+  --bld-b:#ccdae8;  /* steel blue */
+  --bld-c:#e8ddd0;  /* warm stone */
+  --bld-d:#e8d0cc;  /* dusty rose */
+  --bld-e:#d4e8d0;  /* sage green */
+  --bld-f:#e8e4cc;  /* parchment */
+  --plaza:#b8ddb4;  /* park green */
+}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:var(--cream);
+  font-family:'Outfit',system-ui,sans-serif}
+
+/* ══════════════════════════════════════════════
+   HALFTONE PAPER TEXTURE
+══════════════════════════════════════════════ */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:radial-gradient(circle,rgba(0,0,0,.07) 1px,transparent 1px);
+  background-size:9px 9px;
+  opacity:0;transition:opacity 1.2s ease}
+body.ht-on::before{opacity:1}
+
+/* Cross-hatch tint on upper portion */
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(0,0,0,.012) 10px,rgba(0,0,0,.012) 11px),
+    repeating-linear-gradient(-45deg,transparent,transparent 10px,rgba(0,0,0,.012) 10px,rgba(0,0,0,.012) 11px);
+}
+
+/* ══════════════════════════════════════════════
+   LAYOUT
+══════════════════════════════════════════════ */
+#stage{
+  position:relative;width:100%;height:100vh;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:1;gap:0}
+
+/* ══════════════════════════════════════════════
+   TITLE BLOCK
+══════════════════════════════════════════════ */
+#title-block{
+  position:absolute;top:28px;left:50%;
+  transform:translateX(-50%);
+  text-align:center;z-index:20;pointer-events:none;
+  width:max-content;max-width:90vw}
+
+#title-eyebrow{
+  display:block;
+  font-size:clamp(9px,1.2vw,12px);font-weight:700;
+  letter-spacing:.32em;text-transform:uppercase;
+  color:var(--pink);margin-bottom:6px;
+  opacity:0;transform:translateY(-6px);
+  transition:opacity .45s ease,transform .45s ease}
+#title-eyebrow.vis{opacity:1;transform:translateY(0)}
+
+#title-main{
+  display:block;
+  font-size:clamp(26px,4.8vw,56px);font-weight:900;
+  letter-spacing:.05em;text-transform:uppercase;
+  color:var(--ink);line-height:1;
+  /* comic duplicate-shadow trick */
+  text-shadow:
+    3px  3px 0 var(--pink),
+    6px  6px 0 var(--ink);
+  opacity:0;transform:translateY(-14px) skewX(-1deg);
+  transition:opacity .5s ease .1s,transform .5s cubic-bezier(.22,.68,0,1.2) .1s}
+#title-main.vis{opacity:1;transform:translateY(0) skewX(-1deg)}
+
+/* Ink underline */
+#title-rule{
+  display:block;width:0;height:4px;
+  background:var(--pink);margin:8px auto 0;
+  transition:width .6s ease .5s}
+#title-rule.vis{width:70%}
+
+/* ══════════════════════════════════════════════
+   CITY SVG WRAPPER
+══════════════════════════════════════════════ */
+#city-wrap{
+  width:min(900px,95vw);
+  /* maintain 9:5 ratio */
+  aspect-ratio:900/500;
+  position:relative;flex-shrink:0}
+#city-svg{
+  display:block;width:100%;height:100%;
+  overflow:visible}
+
+/* ══════════════════════════════════════════════
+   STREET FILLS
+══════════════════════════════════════════════ */
+.sf{
+  fill:var(--street);
+  opacity:0;
+  transition:opacity .35s ease}
+.sf.vis{opacity:1}
+
+/* Lane centre-line dashes */
+.lane{
+  stroke:var(--cream);stroke-width:2;
+  stroke-dasharray:18 12;fill:none;
+  opacity:0;transition:opacity .3s ease .3s}
+.lane.vis{opacity:1}
+
+/* ── Street grid draw-in lines ── */
+.gl{
+  fill:none;stroke:var(--ink);stroke-width:1.8;
+  stroke-linecap:square;
+  stroke-dasharray:1000;stroke-dashoffset:1000;
+  transition:stroke-dashoffset 0s}   /* transition duration set per-element in JS */
+.gl.drawn{stroke-dashoffset:0}
+
+/* ══════════════════════════════════════════════
+   BUILDINGS
+══════════════════════════════════════════════ */
+.bld{
+  stroke:var(--ink);stroke-width:2;stroke-linejoin:round;
+  transform-origin:center bottom;transform-box:fill-box;
+  transform:scaleY(0);opacity:0;
+  transition:transform .42s cubic-bezier(.34,1.56,.64,1),
+             opacity .15s ease}
+.bld.vis{transform:scaleY(1);opacity:1}
+
+/* Building shadow (offset rect) */
+.bld-sh{
+  fill:rgba(0,0,0,.10);stroke:none;
+  opacity:0;transform-origin:center bottom;transform-box:fill-box;
+  transform:scaleY(0);
+  transition:transform .42s cubic-bezier(.34,1.56,.64,1) .06s,
+             opacity .15s ease .06s}
+.bld-sh.vis{transform:scaleY(1);opacity:1}
+
+/* Windows */
+.win{
+  stroke:var(--ink);stroke-width:1;
+  opacity:0;transition:opacity .25s ease}
+.win.vis{opacity:1}
+
+/* Plaza special */
+.plaza{
+  fill:var(--plaza);stroke:var(--ink);stroke-width:2;
+  transform-origin:center;transform-box:fill-box;
+  opacity:0;transform:scale(.9);
+  transition:opacity .5s ease,transform .5s cubic-bezier(.22,.68,0,1.2)}
+.plaza.vis{opacity:1;transform:scale(1)}
+
+.plaza-detail{
+  fill:none;stroke:rgba(0,100,40,.45);stroke-width:1.4;
+  opacity:0;transition:opacity .4s ease}
+.plaza-detail.vis{opacity:1}
+
+/* ══════════════════════════════════════════════
+   FLOW LINES
+══════════════════════════════════════════════ */
+.flow{
+  fill:none;stroke-linecap:round;stroke-linejoin:round;
+  opacity:0;transition:opacity .4s ease}
+.flow.vis{opacity:1}
+
+/* Each flow path animated independently */
+#fl1{stroke:var(--pink);stroke-width:3.5;stroke-dasharray:16 10}
+#fl2{stroke:var(--cyan);stroke-width:3;stroke-dasharray:12 14}
+#fl3{stroke:var(--yellow);stroke-width:4;stroke-dasharray:10 18}
+
+#fl1.vis{animation:flowA 1.8s linear infinite}
+#fl2.vis{animation:flowB 2.2s linear infinite}
+#fl3.vis{animation:flowC 2.6s linear infinite}
+
+@keyframes flowA{to{stroke-dashoffset:-104}}
+@keyframes flowB{to{stroke-dashoffset:-104}}
+@keyframes flowC{to{stroke-dashoffset:-112}}
+
+/* ══════════════════════════════════════════════
+   FLOW PARTICLES (tiny dots riding the paths)
+══════════════════════════════════════════════ */
+.fparticle{
+  fill:var(--pink);stroke:var(--ink);stroke-width:1;r:5;
+  opacity:0;transition:opacity .3s ease}
+.fparticle.vis{opacity:1}
+#fp1{fill:var(--pink)}
+#fp2{fill:var(--cyan)}
+#fp3{fill:var(--yellow)}
+
+/* Ride animation along each flow path — uses CSS motion-path */
+#fp1.vis{
+  offset-path:path('M0 238 C180 226 360 248 540 236 C700 225 820 242 900 238');
+  animation:ride1 2.4s linear infinite}
+#fp2.vis{
+  offset-path:path('M412 0 C406 120 416 240 412 360 C408 430 414 480 412 500');
+  animation:ride2 2.8s linear infinite}
+#fp3.vis{
+  offset-path:path('M162 105 C280 160 380 148 422 162 C520 175 600 148 682 118');
+  animation:ride3 2.2s linear infinite}
+
+@keyframes ride1{from{offset-distance:0%}to{offset-distance:100%}}
+@keyframes ride2{from{offset-distance:0%}to{offset-distance:100%}}
+@keyframes ride3{from{offset-distance:0%}to{offset-distance:100%}}
+
+/* ══════════════════════════════════════════════
+   AVATARS
+══════════════════════════════════════════════ */
+.av{
+  transform-origin:center;transform-box:fill-box;
+  transform:scale(0);opacity:0;
+  transition:transform .38s cubic-bezier(.34,1.56,.64,1),opacity .1s ease}
+.av.vis{transform:scale(1);opacity:1}
+
+.av-head{fill:var(--cream);stroke:var(--ink);stroke-width:2}
+.av-body{fill:var(--cream);stroke:var(--ink);stroke-width:2}
+.av-detail{stroke:var(--ink);stroke-width:1.8;stroke-linecap:round;fill:none}
+.av-bt{fill:none;stroke:var(--yellow);stroke-width:1.5;stroke-dasharray:4 3;opacity:.7}
+
+/* Walking bob */
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+.av.vis.walking{animation:bob 1.4s ease-in-out infinite}
+
+/* BT pulse ring */
+@keyframes btPing{
+  0%{r:7;opacity:.8}
+  100%{r:16;opacity:0}}
+.bt-ring{
+  fill:none;stroke:var(--yellow);stroke-width:1.5;
+  animation:btPing 1.6s ease-out infinite;
+  transform-origin:center;transform-box:fill-box;
+  opacity:0}
+.av.vis ~ .bt-ring,.av.vis .bt-ring{opacity:1}
+
+/* ══════════════════════════════════════════════
+   COMIC PANEL FRAME
+══════════════════════════════════════════════ */
+#panel-frame{
+  fill:none;stroke:var(--ink);stroke-width:6;
+  stroke-linejoin:miter;
+  stroke-dasharray:2800;stroke-dashoffset:2800;
+  transition:stroke-dashoffset 1.1s cubic-bezier(.4,0,.2,1)}
+#panel-frame.vis{stroke-dashoffset:0}
+
+/* Pink accent inner ring */
+#panel-accent{
+  fill:none;stroke:var(--pink);stroke-width:2;
+  opacity:0;transition:opacity .4s ease .6s}
+#panel-accent.vis{opacity:.55}
+
+/* Ink corner marks */
+.corner-mark{
+  fill:none;stroke:var(--ink);stroke-width:2.5;stroke-linecap:square;
+  opacity:0;transition:opacity .3s ease .8s}
+.corner-mark.vis{opacity:1}
+
+/* ══════════════════════════════════════════════
+   SPEECH BUBBLE
+══════════════════════════════════════════════ */
+#bubble-g{
+  transform-origin:50% 100%;transform-box:fill-box;
+  transform:scale(0) rotate(-3deg);opacity:0;
+  transition:transform .4s cubic-bezier(.34,1.56,.64,1),opacity .15s ease}
+#bubble-g.vis{transform:scale(1) rotate(-1deg);opacity:1}
+
+/* Text inside bubble typed in */
+#bbl-line1,#bbl-line2{
+  font-family:'Outfit',sans-serif;font-size:15px;font-weight:900;
+  font-style:italic;fill:var(--ink);text-anchor:middle;
+  letter-spacing:.01em;
+  opacity:0;transition:opacity .3s ease}
+#bbl-line1.vis{opacity:1}
+#bbl-line2.vis{opacity:1;transition-delay:.28s}
+
+/* ══════════════════════════════════════════════
+   HIGHLIGHT PATH (glows on step 6)
+══════════════════════════════════════════════ */
+#hl-path{
+  fill:none;stroke:var(--yellow);stroke-width:7;
+  stroke-linecap:round;
+  opacity:0;
+  filter:url(#glow)}
+#hl-path.vis{
+  opacity:1;
+  animation:hlPulse 1.1s ease-in-out 4 alternate}
+@keyframes hlPulse{
+  0%{stroke-width:6;opacity:.7;stroke:var(--yellow)}
+  100%{stroke-width:12;opacity:1;stroke:#fff890}}
+
+/* ══════════════════════════════════════════════
+   PANEL NUMBERS (comic caption boxes)
+══════════════════════════════════════════════ */
+.caption-box{
+  opacity:0;transform-origin:left center;transform-box:fill-box;
+  transform:scaleX(0);
+  transition:transform .3s ease,opacity .15s ease}
+.caption-box.vis{transform:scaleX(1);opacity:1}
+
+/* ══════════════════════════════════════════════
+   CTA
+══════════════════════════════════════════════ */
+#cta-block{
+  position:absolute;bottom:30px;left:50%;
+  transform:translateX(-50%) translateY(18px);
+  opacity:0;transition:opacity .5s ease,transform .5s cubic-bezier(.22,.68,0,1.2);
+  z-index:20;cursor:pointer;user-select:none}
+#cta-block.vis{opacity:1;transform:translateX(-50%) translateY(0)}
+
+#cta-btn{
+  display:flex;align-items:center;gap:10px;
+  background:var(--ink);color:var(--yellow);
+  font-family:'Outfit',sans-serif;
+  font-size:clamp(13px,2vw,18px);font-weight:900;
+  letter-spacing:.14em;text-transform:uppercase;
+  padding:clamp(10px,1.4vh,14px) clamp(20px,3vw,32px);
+  border:3px solid var(--ink);
+  box-shadow:5px 5px 0 var(--pink);
+  transition:transform .12s ease,box-shadow .12s ease;
+  position:relative;overflow:hidden}
+#cta-btn::after{
+  content:'';position:absolute;inset:0;
+  background-image:radial-gradient(circle,rgba(255,230,0,.12) 1px,transparent 1px);
+  background-size:5px 5px;pointer-events:none}
+#cta-btn:hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--pink)}
+#cta-btn:active{transform:translate(2px,2px);box-shadow:2px 2px 0 var(--pink)}
+#cta-arrow{width:20px;height:20px;flex-shrink:0;
+  stroke:var(--yellow);stroke-width:2.5;fill:none}
+
+/* ══════════════════════════════════════════════
+   SKIP BUTTON
+══════════════════════════════════════════════ */
+#skip-btn{
+  position:fixed;top:14px;right:18px;z-index:100;
+  background:none;border:1.5px solid rgba(16,16,16,.22);
+  color:rgba(16,16,16,.40);
+  font-family:'Outfit',sans-serif;
+  font-size:10px;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;
+  padding:4px 12px;border-radius:20px;cursor:pointer;
+  opacity:0;transition:opacity .4s ease,color .2s,border-color .2s}
+#skip-btn.vis{opacity:1}
+#skip-btn:hover{color:var(--ink);border-color:var(--ink)}
+
+/* ══════════════════════════════════════════════
+   TRANSITION OVERLAY
+══════════════════════════════════════════════ */
+#tx-overlay{
+  position:fixed;inset:0;z-index:300;
+  background:var(--ink);
+  opacity:0;pointer-events:none;
+  transition:opacity .55s cubic-bezier(.4,0,1,1)}
+#tx-overlay.show{opacity:1;pointer-events:all}
+
+/* ══════════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════════ */
+@media(max-width:600px){
+  #title-block{top:18px}
+  #title-main{text-shadow:2px 2px 0 var(--pink),4px 4px 0 var(--ink)}
+  #cta-block{bottom:22px}
+}
+@media(max-height:620px){
+  #title-block{top:12px}
+  #cta-block{bottom:14px}
+}
+
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <!-- ── TITLE ─────────────────────────────── -->
+  <div id="title-block">
+    <span id="title-eyebrow">An invisible city · made visible</span>
+    <span id="title-main">Comic of Urban Life</span>
+    <span id="title-rule"></span>
+  </div>
+
+  <!-- ── CITY SVG ──────────────────────────── -->
+  <div id="city-wrap">
+  <svg id="city-svg" viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- Glow filter for highlight path -->
+      <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="5" result="blur"/>
+        <feColorMatrix in="blur" type="matrix"
+          values="1 1 0 0 0  1 1 0 0 0  0 0 0 0 0  0 0 0 0.8 0" result="colored"/>
+        <feMerge><feMergeNode in="colored"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <!-- Halftone dots on buildings -->
+      <pattern id="htbld" x="0" y="0" width="7" height="7" patternUnits="userSpaceOnUse">
+        <circle cx="3.5" cy="3.5" r="1" fill="rgba(0,0,0,.055)"/>
+      </pattern>
+      <!-- Window fill -->
+      <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="rgba(100,155,220,.55)"/>
+        <stop offset="1" stop-color="rgba(60,100,180,.30)"/>
+      </linearGradient>
+    </defs>
+
+    <!-- ══ STREET FILLS ══ -->
+    <!-- Horizontal main boulevard y=220–258 -->
+    <rect class="sf" id="sf0" x="0"   y="220" width="900" height="38"/>
+    <!-- Upper street y=96–114 -->
+    <rect class="sf" id="sf1" x="0"   y="96"  width="900" height="18"/>
+    <!-- Lower street y=366–384 -->
+    <rect class="sf" id="sf2" x="0"   y="366" width="900" height="18"/>
+    <!-- Vertical L: x=148–168 -->
+    <rect class="sf" id="sf3" x="148" y="0"   width="20"  height="500"/>
+    <!-- Vertical C: x=402–422 -->
+    <rect class="sf" id="sf4" x="402" y="0"   width="20"  height="500"/>
+    <!-- Vertical R: x=664–684 -->
+    <rect class="sf" id="sf5" x="664" y="0"   width="20"  height="500"/>
+
+    <!-- Lane centre dashes -->
+    <line class="lane" x1="0" y1="239"  x2="900" y2="239"/>
+    <line class="lane" x1="0" y1="105"  x2="900" y2="105"/>
+    <line class="lane" x1="0" y1="375"  x2="900" y2="375"/>
+    <line class="lane" x1="158" y1="0"  x2="158" y2="500"/>
+    <line class="lane" x1="412" y1="0"  x2="412" y2="500"/>
+    <line class="lane" x1="674" y1="0"  x2="674" y2="500"/>
+
+    <!-- ══ GRID DRAW-IN LINES ══
+         Order: main boulevard → upper/lower streets → verticals
+    ══ -->
+    <!-- Main boulevard edges -->
+    <line class="gl" id="gl0" x1="0" y1="220" x2="900" y2="220"/>
+    <line class="gl" id="gl1" x1="0" y1="258" x2="900" y2="258"/>
+    <!-- Upper street edges -->
+    <line class="gl" id="gl2" x1="0" y1="96"  x2="900" y2="96"/>
+    <line class="gl" id="gl3" x1="0" y1="114" x2="900" y2="114"/>
+    <!-- Lower street edges -->
+    <line class="gl" id="gl4" x1="0" y1="366" x2="900" y2="366"/>
+    <line class="gl" id="gl5" x1="0" y1="384" x2="900" y2="384"/>
+    <!-- Vertical L edges -->
+    <line class="gl" id="gl6" x1="148" y1="0" x2="148" y2="500"/>
+    <line class="gl" id="gl7" x1="168" y1="0" x2="168" y2="500"/>
+    <!-- Vertical C edges -->
+    <line class="gl" id="gl8" x1="402" y1="0" x2="402" y2="500"/>
+    <line class="gl" id="gl9" x1="422" y1="0" x2="422" y2="500"/>
+    <!-- Vertical R edges -->
+    <line class="gl" id="gl10" x1="664" y1="0" x2="664" y2="500"/>
+    <line class="gl" id="gl11" x1="684" y1="0" x2="684" y2="500"/>
+
+    <!-- ══ BUILDING SHADOWS (offset offset) ══ -->
+    <rect class="bld-sh" x="8"   y="6"   width="138" height="88"/>
+    <rect class="bld-sh" x="176" y="5"   width="222" height="89"/>
+    <rect class="bld-sh" x="428" y="6"   width="230" height="87"/>
+    <rect class="bld-sh" x="690" y="6"   width="206" height="87"/>
+    <rect class="bld-sh" x="5"   y="120" width="141" height="98"/>
+    <rect class="bld-sh" x="176" y="118" width="220" height="100"/>
+    <rect class="bld-sh" x="690" y="120" width="206" height="98"/>
+    <rect class="bld-sh" x="5"   y="265" width="141" height="99"/>
+    <rect class="bld-sh" x="176" y="263" width="222" height="101"/>
+    <rect class="bld-sh" x="428" y="263" width="230" height="101"/>
+    <rect class="bld-sh" x="690" y="265" width="206" height="99"/>
+    <rect class="bld-sh" x="5"   y="390" width="141" height="108"/>
+    <rect class="bld-sh" x="176" y="388" width="222" height="110"/>
+    <rect class="bld-sh" x="428" y="388" width="230" height="110"/>
+    <rect class="bld-sh" x="690" y="390" width="206" height="108"/>
+
+    <!-- ══ BUILDINGS — ROW 0 (y=0–96) ══ -->
+    <rect class="bld" id="b00" x="2"   y="2"  width="144" height="92" fill="var(--bld-b)"/>
+    <rect class="bld" id="b01" x="170" y="2"  width="100" height="92" fill="var(--bld-c)"/>
+    <rect class="bld" id="b02" x="276" y="4"  width="124" height="90" fill="var(--bld-a)"/>
+    <rect class="bld" id="b03" x="424" y="2"  width="118" height="92" fill="var(--bld-e)"/>
+    <rect class="bld" id="b04" x="548" y="4"  width="114" height="90" fill="var(--bld-d)"/>
+    <rect class="bld" id="b05" x="686" y="2"  width="90"  height="92" fill="var(--bld-f)"/>
+    <rect class="bld" id="b06" x="782" y="4"  width="116" height="90" fill="var(--bld-b)"/>
+
+    <!-- ══ BUILDINGS — ROW 1 (y=114–220) ══ -->
+    <rect class="bld" id="b10" x="2"   y="116" width="144" height="102" fill="var(--bld-c)"/>
+    <rect class="bld" id="b11" x="170" y="116" width="106" height="102" fill="var(--bld-d)"/>
+    <rect class="bld" id="b12" x="282" y="118" width="118" height="100" fill="var(--bld-f)"/>
+    <!-- PLAZA -->
+    <rect class="plaza" id="plaza0" x="424" y="118" width="238" height="100"/>
+    <rect class="bld" id="b13" x="686" y="116" width="90"  height="102" fill="var(--bld-a)"/>
+    <rect class="bld" id="b14" x="782" y="118" width="116" height="100" fill="var(--bld-e)"/>
+
+    <!-- Plaza inner detail -->
+    <rect class="plaza-detail" id="pd0" x="444" y="138" width="198" height="60" rx="4"/>
+    <circle class="plaza-detail" id="pd1" cx="543" cy="168" r="20"/>
+    <line class="plaza-detail" id="pd2" x1="460" y1="168" x2="524" y2="168"/>
+    <line class="plaza-detail" id="pd3" x1="562" y1="168" x2="624" y2="168"/>
+    <line class="plaza-detail" id="pd4" x1="543" y1="138" x2="543" y2="148"/>
+    <line class="plaza-detail" id="pd5" x1="543" y1="188" x2="543" y2="198"/>
+
+    <!-- ══ BUILDINGS — ROW 2 (y=258–366) ══ -->
+    <rect class="bld" id="b20" x="2"   y="260" width="144" height="104" fill="var(--bld-a)"/>
+    <rect class="bld" id="b21" x="170" y="260" width="106" height="104" fill="var(--bld-e)"/>
+    <rect class="bld" id="b22" x="282" y="262" width="118" height="102" fill="var(--bld-c)"/>
+    <rect class="bld" id="b23" x="424" y="260" width="118" height="104" fill="var(--bld-f)"/>
+    <rect class="bld" id="b24" x="548" y="262" width="114" height="102" fill="var(--bld-b)"/>
+    <rect class="bld" id="b25" x="686" y="260" width="90"  height="104" fill="var(--bld-d)"/>
+    <rect class="bld" id="b26" x="782" y="262" width="116" height="102" fill="var(--bld-c)"/>
+
+    <!-- ══ BUILDINGS — ROW 3 (y=384–500) ══ -->
+    <rect class="bld" id="b30" x="2"   y="386" width="144" height="112" fill="var(--bld-f)"/>
+    <rect class="bld" id="b31" x="170" y="386" width="230" height="112" fill="var(--bld-d)"/>
+    <rect class="bld" id="b32" x="424" y="386" width="238" height="112" fill="var(--bld-b)"/>
+    <rect class="bld" id="b33" x="686" y="386" width="212" height="112" fill="var(--bld-a)"/>
+
+    <!-- ══ HALFTONE DOTS OVERLAY ══ -->
+    <rect id="ht-bld" x="0" y="0" width="900" height="500"
+      fill="url(#htbld)" pointer-events="none" opacity="0"
+      style="transition:opacity .9s ease"/>
+
+    <!-- ══ WINDOWS ══ -->
+    <!-- b00 -->
+    <rect class="win" x="12"  y="14" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="34"  y="14" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="56"  y="14" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="78"  y="14" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="100" y="14" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="12"  y="34" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="56"  y="34" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="100" y="34" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="12"  y="54" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="78"  y="54" width="16" height="11" fill="url(#wg)"/>
+    <!-- b03 -->
+    <rect class="win" x="434" y="14" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="458" y="14" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="482" y="14" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="506" y="14" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="434" y="34" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="482" y="34" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="530" y="34" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="434" y="54" width="16" height="11" fill="url(#wg)"/>
+    <rect class="win" x="506" y="54" width="16" height="11" fill="url(#wg)"/>
+    <!-- b22 -->
+    <rect class="win" x="292" y="272" width="14" height="10" fill="url(#wg)"/>
+    <rect class="win" x="314" y="272" width="14" height="10" fill="url(#wg)"/>
+    <rect class="win" x="336" y="272" width="14" height="10" fill="url(#wg)"/>
+    <rect class="win" x="292" y="290" width="14" height="10" fill="url(#wg)"/>
+    <rect class="win" x="358" y="290" width="14" height="10" fill="url(#wg)"/>
+    <!-- b24 -->
+    <rect class="win" x="560" y="272" width="14" height="10" fill="url(#wg)"/>
+    <rect class="win" x="582" y="272" width="14" height="10" fill="url(#wg)"/>
+    <rect class="win" x="604" y="272" width="14" height="10" fill="url(#wg)"/>
+    <rect class="win" x="626" y="272" width="14" height="10" fill="url(#wg)"/>
+    <rect class="win" x="560" y="292" width="14" height="10" fill="url(#wg)"/>
+    <rect class="win" x="626" y="292" width="14" height="10" fill="url(#wg)"/>
+
+    <!-- ══ CAPTION BOXES (comic label) ══ -->
+    <g class="caption-box" id="cap0">
+      <rect x="2" y="2" width="70" height="16" fill="var(--ink)"/>
+      <text x="8" y="13" font-family="'Outfit',sans-serif" font-size="9"
+        font-weight="700" fill="var(--yellow)" letter-spacing=".12em">WEIMAR</text>
+    </g>
+
+    <!-- ══ FLOW LINES ══ -->
+    <!-- Pink: along main boulevard -->
+    <path class="flow" id="fl1"
+      d="M0 238 C180 226 360 248 540 236 C700 225 820 242 900 238"/>
+    <!-- Cyan: down center vertical -->
+    <path class="flow" id="fl2"
+      d="M412 0 C406 120 416 240 412 360 C408 430 414 480 412 500"/>
+    <!-- Yellow: through upper street to plaza -->
+    <path class="flow" id="fl3"
+      d="M162 105 C280 160 380 148 422 162 C520 175 600 148 682 118"/>
+
+    <!-- ══ FLOW PARTICLES ══ -->
+    <circle class="fparticle" id="fp1" r="5"/>
+    <circle class="fparticle" id="fp2" r="4.5"/>
+    <circle class="fparticle" id="fp3" r="4"/>
+
+    <!-- ══ AVATARS ══ -->
+    <!-- av1: main intersection, walking -->
+    <g class="av" id="av1" transform="translate(412 230)">
+      <rect class="av-body" x="-5" y="-8" width="10" height="13" rx="1.5"/>
+      <circle class="av-head" cx="0" cy="-17" r="7"/>
+      <!-- eyes -->
+      <circle cx="-2.5" cy="-17.5" r="1.3" fill="var(--ink)"/>
+      <circle cx="2.5"  cy="-17.5" r="1.3" fill="var(--ink)"/>
+      <!-- arms -->
+      <line class="av-detail" x1="-5" y1="-4"  x2="-11" y2="2"/>
+      <line class="av-detail" x1="5"  y1="-4"  x2="11"  y2="2"/>
+      <!-- legs -->
+      <line class="av-detail" x1="-3" y1="5"   x2="-4"  y2="14"/>
+      <line class="av-detail" x1="3"  y1="5"   x2="4"   y2="14"/>
+      <!-- BT ring -->
+      <circle class="bt-ring" cx="0" cy="-17" r="7"/>
+    </g>
+
+    <!-- av2: upper street heading toward plaza -->
+    <g class="av" id="av2" transform="translate(300 105)">
+      <rect class="av-body" x="-5" y="-8" width="10" height="13" rx="1.5"/>
+      <circle class="av-head" cx="0" cy="-17" r="7"/>
+      <circle cx="-2.5" cy="-17.5" r="1.3" fill="var(--ink)"/>
+      <circle cx="2.5"  cy="-17.5" r="1.3" fill="var(--ink)"/>
+      <line class="av-detail" x1="-5" y1="-4"  x2="-11" y2="2"/>
+      <line class="av-detail" x1="5"  y1="-4"  x2="11"  y2="2"/>
+      <line class="av-detail" x1="-3" y1="5"   x2="-4"  y2="14"/>
+      <line class="av-detail" x1="3"  y1="5"   x2="4"   y2="14"/>
+    </g>
+
+    <!-- av3: lower right of main boulevard -->
+    <g class="av" id="av3" transform="translate(600 248)">
+      <rect class="av-body" x="-5" y="-8" width="10" height="13" rx="1.5"/>
+      <circle class="av-head" cx="0" cy="-17" r="7"/>
+      <circle cx="-2.5" cy="-17.5" r="1.3" fill="var(--ink)"/>
+      <circle cx="2.5"  cy="-17.5" r="1.3" fill="var(--ink)"/>
+      <line class="av-detail" x1="-5" y1="-4"  x2="-11" y2="2"/>
+      <line class="av-detail" x1="5"  y1="-4"  x2="11"  y2="2"/>
+      <line class="av-detail" x1="-3" y1="5"   x2="-4"  y2="14"/>
+      <line class="av-detail" x1="3"  y1="5"   x2="4"   y2="14"/>
+      <circle class="bt-ring" cx="0" cy="-17" r="7"/>
+    </g>
+
+    <!-- av4: vertical cross street, lower zone -->
+    <g class="av" id="av4" transform="translate(158 310)">
+      <rect class="av-body" x="-5" y="-8" width="10" height="13" rx="1.5"/>
+      <circle class="av-head" cx="0" cy="-17" r="7"/>
+      <circle cx="-2.5" cy="-17.5" r="1.3" fill="var(--ink)"/>
+      <circle cx="2.5"  cy="-17.5" r="1.3" fill="var(--ink)"/>
+      <line class="av-detail" x1="-5" y1="-4"  x2="-11" y2="2"/>
+      <line class="av-detail" x1="5"  y1="-4"  x2="11"  y2="2"/>
+      <line class="av-detail" x1="-3" y1="5"   x2="-4"  y2="14"/>
+      <line class="av-detail" x1="3"  y1="5"   x2="4"   y2="14"/>
+    </g>
+
+    <!-- ══ HIGHLIGHT PATH (main boulevard pulse) ══ -->
+    <path id="hl-path"
+      d="M0 238 C180 226 360 248 540 236 C700 225 820 242 900 238"/>
+
+    <!-- ══ COMIC PANEL FRAME ══ -->
+    <rect id="panel-frame"  x="5"  y="5"  width="890" height="490"/>
+    <rect id="panel-accent" x="10" y="10" width="880" height="480"/>
+
+    <!-- Corner marks (Ligne Claire style) -->
+    <g class="corner-mark">
+      <!-- TL -->
+      <polyline points="5,30 5,5 30,5"/>
+      <!-- TR -->
+      <polyline points="870,5 895,5 895,30"/>
+      <!-- BR -->
+      <polyline points="895,470 895,495 870,495"/>
+      <!-- BL -->
+      <polyline points="30,495 5,495 5,470"/>
+    </g>
+
+    <!-- ══ SPEECH BUBBLE ══ -->
+    <!-- Positioned top-right; tail → center intersection -->
+    <g id="bubble-g" transform="translate(620 12)">
+      <!-- Bubble body -->
+      <rect x="0" y="0" width="210" height="68" rx="7"
+        fill="var(--yellow)" stroke="var(--ink)" stroke-width="3.5"/>
+      <!-- Halftone inside bubble -->
+      <rect x="4" y="4" width="202" height="60" rx="4"
+        fill="url(#htbld)" opacity=".6" pointer-events="none"/>
+      <!-- Tail (pointing down-left toward main intersection) -->
+      <polygon points="28,68 10,90 58,68"
+        fill="var(--yellow)" stroke="var(--ink)" stroke-width="3.5"
+        stroke-linejoin="round" paint-order="stroke fill"/>
+      <!-- Text -->
+      <text id="bbl-line1" x="105" y="28">
+        "It was never
+      </text>
+      <text id="bbl-line2" x="105" y="52">
+        empty."
+      </text>
+    </g>
+
+  </svg>
+  </div><!-- /city-wrap -->
+
+  <!-- ── CTA ──────────────────────────────── -->
+  <div id="cta-block">
+    <div id="cta-btn">
+      <span>Follow one.</span>
+      <svg id="cta-arrow" viewBox="0 0 20 20">
+        <path d="M3 10h14M11 4l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  </div>
+
+</div><!-- /stage -->
+
+<!-- ── SKIP ─────────────────────────────── -->
+<button id="skip-btn">Skip →</button>
+
+<!-- ── TRANSITION OVERLAY ────────────────── -->
+<div id="tx-overlay"></div>
+
+<script>
+/* ════════════════════════════════════════
+   ANIMATION SEQUENCER
+════════════════════════════════════════ */
+const T = [];  // timer handles
+
+const seq = [
+  [0,    startHalftone],
+  [300,  showTitle],
+  [1100, drawStreets],
+  [2600, stampBuildings],
+  [3800, revealWindows],
+  [4400, startFlows],
+  [5300, popAvatars],
+  [6300, traceFrame],
+  [7600, popBubble],
+  [9000, glowHighlight],
+  [9900, showCTA],
+  [2000, showSkip],
+];
+
+function sched(ms, fn){ T.push(setTimeout(fn, ms)); }
+
+/* ── Helpers ── */
+function vis(sel, delay=0){
+  const els = typeof sel === 'string'
+    ? document.querySelectorAll(sel)
+    : [sel];
+  els.forEach((el,i) => T.push(setTimeout(()=>el.classList.add('vis'), delay + i*0)));
+}
+function visStagger(sel, stride=60, baseDelay=0){
+  document.querySelectorAll(sel).forEach((el,i) =>
+    T.push(setTimeout(()=>el.classList.add('vis'), baseDelay + i*stride)));
+}
+
+/* ── Phase 0: halftone paper ── */
+function startHalftone(){
+  document.body.classList.add('ht-on');
+}
+
+/* ── Phase 1: title ── */
+function showTitle(){
+  vis('#title-eyebrow');
+  T.push(setTimeout(()=>vis('#title-main'), 160));
+  T.push(setTimeout(()=>vis('#title-rule'), 420));
+}
+
+/* ── Phase 2: streets draw in ── */
+function drawStreets(){
+  // Fade in street fills first
+  visStagger('.sf', 55, 0);
+  visStagger('.lane', 40, 200);
+
+  // Grid lines draw in with stroke-dashoffset
+  // Horizontal lines first (length 900), then verticals (length 500)
+  const horiz = ['gl0','gl1','gl2','gl3','gl4','gl5'];
+  const vert  = ['gl6','gl7','gl8','gl9','gl10','gl11'];
+
+  horiz.forEach((id, i) => {
+    T.push(setTimeout(() => {
+      const el = document.getElementById(id);
+      el.style.transition = `stroke-dashoffset ${0.75 + i*0.04}s cubic-bezier(.4,0,.2,1)`;
+      el.classList.add('drawn');
+    }, i * 90));
+  });
+  vert.forEach((id, i) => {
+    T.push(setTimeout(() => {
+      const el = document.getElementById(id);
+      el.style.strokeDasharray = '500';
+      el.style.strokeDashoffset = '500';
+      el.style.transition = `stroke-dashoffset ${0.7 + i*0.04}s cubic-bezier(.4,0,.2,1)`;
+      el.classList.add('drawn');
+    }, 500 + i * 80));
+  });
+}
+
+/* ── Phase 3: buildings stamp in ── */
+function stampBuildings(){
+  // Shadows first, then fills
+  visStagger('.bld-sh', 42, 0);
+  visStagger('.bld', 48, 60);
+  // Plaza has its own animation
+  T.push(setTimeout(()=>{
+    vis('#plaza0');
+    T.push(setTimeout(()=>visStagger('.plaza-detail',80,0), 280));
+  }, 400));
+  // Caption
+  T.push(setTimeout(()=>vis('#cap0'), 900));
+}
+
+/* ── Phase 4: windows + halftone ── */
+function revealWindows(){
+  visStagger('.win', 28, 0);
+  T.push(setTimeout(()=>{
+    const ht = document.getElementById('ht-bld');
+    ht.style.opacity = '0.45';
+  }, 200));
+}
+
+/* ── Phase 5: flow lines ── */
+function startFlows(){
+  T.push(setTimeout(()=>{ vis('#fl1'); vis('#fp1'); }, 0));
+  T.push(setTimeout(()=>{ vis('#fl2'); vis('#fp2'); }, 280));
+  T.push(setTimeout(()=>{ vis('#fl3'); vis('#fp3'); }, 520));
+}
+
+/* ── Phase 6: avatars ── */
+function popAvatars(){
+  const ids = ['av1','av2','av3','av4'];
+  ids.forEach((id,i)=>{
+    T.push(setTimeout(()=>{
+      const el = document.getElementById(id);
+      el.classList.add('vis');
+      if(id === 'av1' || id === 'av3'){
+        setTimeout(()=>el.classList.add('walking'), 300);
+      }
+    }, i * 200));
+  });
+}
+
+/* ── Phase 7: panel frame trace ── */
+function traceFrame(){
+  const pf = document.getElementById('panel-frame');
+  pf.style.transition = 'stroke-dashoffset 1.05s cubic-bezier(.4,0,.2,1)';
+  pf.classList.add('vis');
+  T.push(setTimeout(()=>{
+    document.getElementById('panel-accent').classList.add('vis');
+    document.querySelector('.corner-mark').classList.add('vis');
+  }, 700));
+}
+
+/* ── Phase 8: speech bubble ── */
+function popBubble(){
+  const bg = document.getElementById('bubble-g');
+  bg.classList.add('vis');
+  T.push(setTimeout(()=>{
+    document.getElementById('bbl-line1').classList.add('vis');
+    T.push(setTimeout(()=>
+      document.getElementById('bbl-line2').classList.add('vis'), 280));
+  }, 220));
+}
+
+/* ── Phase 9: highlight path ── */
+function glowHighlight(){
+  document.getElementById('hl-path').classList.add('vis');
+}
+
+/* ── Phase 10: CTA ── */
+function showCTA(){
+  document.getElementById('cta-block').classList.add('vis');
+}
+
+/* ── Skip button ── */
+function showSkip(){
+  document.getElementById('skip-btn').classList.add('vis');
+}
+
+/* ════════════════════════════════════════
+   SKIP ALL
+════════════════════════════════════════ */
+function skipAll(){
+  T.forEach(clearTimeout);
+  document.body.classList.add('ht-on');
+
+  // Instant-vis everything
+  const targets = [
+    '.sf','.lane','.bld-sh','.bld','.plaza','.plaza-detail',
+    '.win','.flow','.fparticle','.av','.corner-mark',
+    '#title-eyebrow','#title-main','#title-rule',
+    '#panel-frame','#panel-accent',
+    '#bubble-g','#bbl-line1','#bbl-line2',
+    '#hl-path','#cta-block','#skip-btn','#cap0'
+  ];
+  targets.forEach(sel =>
+    document.querySelectorAll(sel).forEach(el => el.classList.add('vis')));
+
+  // Instant grid lines
+  ['gl0','gl1','gl2','gl3','gl4','gl5'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.transition = 'none';
+    el.classList.add('drawn');
+  });
+  ['gl6','gl7','gl8','gl9','gl10','gl11'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.strokeDasharray = '500';
+    el.style.strokeDashoffset = '500';
+    el.style.transition = 'none';
+    el.classList.add('drawn');
+  });
+
+  document.getElementById('ht-bld').style.opacity = '0.45';
+
+  const pf = document.getElementById('panel-frame');
+  pf.style.transition = 'none';
+  pf.classList.add('vis');
+
+  document.querySelectorAll('.av').forEach(el => el.classList.add('walking'));
+}
+
+/* ════════════════════════════════════════
+   TRANSITION OUT
+════════════════════════════════════════ */
+function transitionOut(e){
+  if(e && e.target && e.target.id === 'skip-btn') return;
+  const ov = document.getElementById('tx-overlay');
+  ov.classList.add('show');
+  sessionStorage.setItem('cityLayers_fromIntro','1');
+  setTimeout(()=>{ window.location.href = 'globe.html'; }, 700);
+}
+
+/* ════════════════════════════════════════
+   BOOT
+════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  // Start sequence
+  seq.forEach(([ms, fn]) => sched(ms, fn));
+
+  // Skip button
+  document.getElementById('skip-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    skipAll();
+  });
+
+  // CTA → transition
+  document.getElementById('cta-block').addEventListener('click', transitionOut);
+
+  // Click anywhere after CTA visible
+  document.getElementById('stage').addEventListener('click', e => {
+    if(document.getElementById('cta-block').classList.contains('vis')){
+      transitionOut(e);
+    }
+  });
+
+  // Keyboard: Space or Enter to skip
+  document.addEventListener('keydown', e => {
+    if(e.key === ' ' || e.key === 'Enter'){
+      if(!document.getElementById('cta-block').classList.contains('vis')){
+        skipAll();
+      } else {
+        transitionOut();
+      }
+    }
+    if(e.key === 'Escape') skipAll();
+  });
+});
+</script>
+</body>
+</html>

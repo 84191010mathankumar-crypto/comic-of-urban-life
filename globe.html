@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Comic of Urban Life — Globe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#101010;--pink:#ff2d78;--yellow:#ffe600;--cyan:#00d4e0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#050b18;
+  font-family:'Outfit',system-ui,sans-serif;color:#fff}
+
+/* ─────────────────────────────────────────
+   LOADING SCREEN
+───────────────────────────────────────── */
+#loading-screen{
+  position:fixed;inset:0;z-index:200;background:#050b18;
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:18px;
+  transition:opacity .75s ease}
+#loading-screen.fade-out{opacity:0;pointer-events:none}
+
+.ld-eyebrow{
+  font-size:11px;font-weight:700;letter-spacing:.32em;
+  text-transform:uppercase;color:rgba(255,255,255,.38)}
+.ld-title{
+  font-size:clamp(30px,6vw,70px);font-weight:900;
+  letter-spacing:.07em;text-transform:uppercase;text-align:center;line-height:1.1;
+  color:var(--yellow);
+  text-shadow:4px 4px 0 var(--pink),8px 8px 0 rgba(0,0,0,.5)}
+.ld-bar-wrap{
+  width:min(360px,75vw);height:5px;
+  background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;
+  margin-top:4px}
+#ld-bar{
+  height:100%;width:0;background:var(--yellow);border-radius:3px;
+  transition:width .28s ease}
+.ld-msg{
+  font-size:10px;font-weight:400;letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(255,255,255,.28);transition:opacity .3s;margin-top:2px}
+
+/* halftone overlay on loading screen */
+#loading-screen::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(circle,rgba(255,230,0,.06) 1px,transparent 1px);
+  background-size:8px 8px;z-index:1}
+.ld-eyebrow,.ld-title,.ld-bar-wrap,.ld-msg{position:relative;z-index:2}
+
+/* ─────────────────────────────────────────
+   GLOBE WRAPPER
+───────────────────────────────────────── */
+#globe-wrap{
+  position:fixed;inset:0;
+  opacity:0;transition:opacity .9s ease;pointer-events:none}
+#globe-wrap.vis{opacity:1;pointer-events:auto}
+#globe-canvas{
+  display:block;width:100%;height:100%;
+  cursor:grab}
+#globe-canvas:active{cursor:grabbing}
+
+/* ─────────────────────────────────────────
+   TITLE OVERLAY
+───────────────────────────────────────── */
+#globe-title{
+  position:absolute;top:28px;left:50%;
+  transform:translateX(-50%);
+  text-align:center;pointer-events:none;z-index:10;
+  opacity:0;transition:opacity .6s ease .4s}
+#globe-wrap.vis #globe-title{opacity:1}
+.gt-eye{
+  display:block;font-size:10px;font-weight:700;letter-spacing:.3em;
+  text-transform:uppercase;color:var(--yellow);margin-bottom:5px}
+.gt-main{
+  display:block;font-size:clamp(18px,2.6vw,36px);font-weight:900;
+  letter-spacing:.06em;text-transform:uppercase;color:#fff;line-height:1;
+  text-shadow:2px 2px 0 var(--pink),4px 4px 0 rgba(0,0,0,.45)}
+
+/* ─────────────────────────────────────────
+   SEARCH BOX
+───────────────────────────────────────── */
+#search-wrap{
+  position:absolute;bottom:66px;left:50%;
+  transform:translateX(-50%);
+  z-index:20;display:flex;gap:0;
+  opacity:0;transition:opacity .5s ease;pointer-events:none}
+#search-wrap.vis{opacity:1;pointer-events:auto}
+#city-input{
+  background:rgba(255,255,255,.10);
+  border:2px solid rgba(255,255,255,.22);border-right:none;
+  border-radius:4px 0 0 4px;
+  color:#fff;font-family:'Outfit',sans-serif;
+  font-size:14px;font-weight:700;letter-spacing:.05em;
+  padding:10px 16px;width:230px;outline:none;
+  backdrop-filter:blur(12px)}
+#city-input::placeholder{color:rgba(255,255,255,.3)}
+#city-input:focus{
+  border-color:var(--yellow);
+  background:rgba(255,255,255,.14)}
+#search-go{
+  background:var(--yellow);color:var(--ink);
+  border:2px solid var(--yellow);border-radius:0 4px 4px 0;
+  font-family:'Outfit',sans-serif;font-size:12px;font-weight:900;
+  letter-spacing:.16em;text-transform:uppercase;
+  padding:10px 18px;cursor:pointer;transition:background .12s,color .12s}
+#search-go:hover{background:#fff;color:var(--ink)}
+
+/* ─────────────────────────────────────────
+   HINT
+───────────────────────────────────────── */
+#globe-hint{
+  position:absolute;bottom:40px;left:50%;
+  transform:translateX(-50%);
+  font-size:10px;font-weight:400;letter-spacing:.2em;
+  text-transform:uppercase;color:rgba(255,255,255,.30);
+  pointer-events:none;white-space:nowrap;text-align:center;z-index:10;
+  transition:opacity .4s}
+
+/* ─────────────────────────────────────────
+   CITY TOOLTIP
+───────────────────────────────────────── */
+#city-tooltip{
+  position:fixed;z-index:50;
+  background:var(--ink);color:var(--yellow);
+  font-family:'Outfit',sans-serif;font-size:13px;font-weight:900;
+  letter-spacing:.1em;text-transform:uppercase;
+  padding:5px 12px;border-radius:3px;
+  border:2px solid var(--yellow);
+  box-shadow:3px 3px 0 var(--pink);
+  pointer-events:none;opacity:0;transition:opacity .15s;white-space:nowrap;
+  background-image:radial-gradient(circle,rgba(255,230,0,.12) 1px,transparent 1px);
+  background-size:5px 5px}
+#city-tooltip.vis{opacity:1}
+
+/* ─────────────────────────────────────────
+   ZOOM ZOOM FLASH — city selected indicator
+───────────────────────────────────────── */
+#zoom-flash{
+  position:fixed;inset:0;z-index:180;pointer-events:none;
+  opacity:0;background:radial-gradient(circle at 50% 50%,rgba(255,230,0,.18),transparent 70%);
+  transition:opacity .3s}
+#zoom-flash.show{opacity:1}
+
+/* ─────────────────────────────────────────
+   TRANSITION OVERLAY
+───────────────────────────────────────── */
+#tx-overlay{
+  position:fixed;inset:0;z-index:300;
+  background:var(--ink);opacity:0;pointer-events:none;
+  transition:opacity .7s ease}
+#tx-overlay.show{opacity:1;pointer-events:all}
+
+/* ─────────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────────── */
+@media(max-width:600px){
+  #city-input{width:180px;font-size:13px}
+  .gt-main{font-size:clamp(16px,5vw,28px)}
+}
+</style>
+</head>
+<body>
+
+<!-- ── LOADING ─────────────────────────── -->
+<div id="loading-screen">
+  <div class="ld-eyebrow">A comic of urban life</div>
+  <div class="ld-title">Comic of<br>Urban Life</div>
+  <div class="ld-bar-wrap"><div id="ld-bar"></div></div>
+  <div class="ld-msg" id="ld-msg">Initialising…</div>
+</div>
+
+<!-- ── GLOBE ──────────────────────────── -->
+<div id="globe-wrap">
+  <canvas id="globe-canvas"></canvas>
+
+  <div id="globe-title">
+    <span class="gt-eye">Select your city</span>
+    <span class="gt-main">Where are you?</span>
+  </div>
+
+  <div id="search-wrap">
+    <input id="city-input" type="text"
+      placeholder="Enter a German city…"
+      autocomplete="off" spellcheck="false"/>
+    <button id="search-go">Go →</button>
+  </div>
+
+  <div id="globe-hint">Germany is glowing — click it</div>
+</div>
+
+<div id="city-tooltip"></div>
+<div id="zoom-flash"></div>
+<div id="tx-overlay"></div>
+
+<script>
+/* ── Guard: must arrive from intro ── */
+if(!sessionStorage.getItem('cityLayers_fromIntro')){
+  window.location.replace('intro.html');
+}
+
+/* ════════════════════════════════════════
+   DATA
+════════════════════════════════════════ */
+
+// German cities  [name, lat, lon]
+const CITIES = [
+  ['Berlin',      52.52, 13.40],
+  ['Munich',      48.14, 11.58],
+  ['Hamburg',     53.55, 10.00],
+  ['Cologne',     50.94,  6.96],
+  ['Frankfurt',   50.11,  8.68],
+  ['Stuttgart',   48.78,  9.18],
+  ['Leipzig',     51.34, 12.38],
+  ['Weimar',      50.98, 11.33],
+  ['Dresden',     51.05, 13.74],
+  ['Düsseldorf',  51.23,  6.78],
+  ['Bremen',      53.08,  8.80],
+  ['Hannover',    52.37,  9.74],
+  ['Nuremberg',   49.45, 11.08],
+  ['Dortmund',    51.51,  7.46],
+  ['Erfurt',      50.98, 11.03],
+  ['Freiburg',    47.99,  7.84],
+];
+
+// Continent polygons  [lat, lon][]
+const LANDS = [
+  // North America
+  [[70,-138],[62,-162],[66,-166],[72,-160],[75,-156],[71,-138],
+   [70,-100],[60,-64],[47,-53],[44,-66],[35,-75],[24,-81],
+   [15,-88],[8,-77],[10,-85],[20,-105],[30,-117],[48,-124],
+   [58,-137],[62,-141],[70,-138]],
+  // Greenland
+  [[76,-68],[65,-54],[60,-44],[60,-49],[68,-18],[77,-13],[83,-26],[76,-68]],
+  // South America
+  [[12,-73],[10,-61],[0,-50],[-5,-35],[-15,-40],[-25,-48],
+   [-34,-54],[-55,-67],[-55,-74],[-40,-74],[-20,-70],[0,-80],[12,-73]],
+  // Europe (coarse; Germany drawn separately)
+  [[70,26],[67,20],[64,-22],[58,-8],[50,-6],[44,-9],
+   [36,-6],[36, 3],[43, 5],[44,15],[40,26],[38,36],[42,42],
+   [55,26],[61,28],[67,18],[70,26]],
+  // Scandinavia supplement
+  [[58,5],[56,8],[57,10],[60,5],[65,14],[68,18],[70,26],[68,28],
+   [61,28],[55,26],[56,10],[58,5]],
+  // Africa
+  [[37,-6],[37,12],[31,32],[23,37],[12,45],[0,42],
+   [-10,38],[-22,35],[-35,18],[-34,26],[-25,33],
+   [-15,38],[0,42],[15,38],[23,37],[37,10],[37,-6]],
+  // Asia (main landmass)
+  [[76,142],[71,140],[70,179],[55,161],[40,143],[25,122],
+   [22,115],[10,100],[0,104],[10,76],[20,60],[25,55],
+   [30,50],[40,50],[42,42],[55,26],[60,45],[68,40],[72,60],
+   [76,80],[77,100],[76,142]],
+  // Japan
+  [[41,140],[38,141],[33,131],[30,130],[34,136],[36,136],[40,139],[41,140]],
+  // UK & Ireland
+  [[58,-3],[51,-1],[50,1],[55,0],[58,-3]],
+  [[54,-10],[52,-10],[53,-6],[55,-6],[54,-10]],
+  // Australia
+  [[-12,136],[-14,127],[-22,114],[-32,115],[-34,120],
+   [-38,145],[-38,148],[-28,154],[-22,150],[-14,144],[-12,136]],
+  // New Zealand
+  [[-34,172],[-46,168],[-46,170],[-40,176],[-34,172]],
+  // Iceland
+  [[63,-25],[64,-14],[66,-14],[66,-24],[63,-25]],
+  // Madagascar
+  [[-12,49],[-16,44],[-25,44],[-26,48],[-15,50],[-12,49]],
+];
+
+// Germany — detailed polygon  [lat, lon]
+const GERMANY = [
+  [55.1,8.6],[55.0,10.7],[54.4,12.7],[54.0,14.5],[52.0,14.7],
+  [51.0,14.5],[50.8,15.0],[50.0,14.8],[48.8,13.8],[47.7,12.3],
+  [47.4,10.2],[47.6,8.1],[47.7,7.5],[47.7,7.6],[48.6,7.6],
+  [49.0,7.0],[49.5,6.2],[50.1,6.1],[51.0,6.0],[51.8,5.9],
+  [52.2,6.5],[53.0,7.0],[53.6,6.8],[53.7,7.5],[54.2,8.0],
+  [54.9,8.3],[55.1,8.6]
+];
+
+/* ════════════════════════════════════════
+   CANVAS SETUP
+════════════════════════════════════════ */
+const canvas = document.getElementById('globe-canvas');
+const ctx    = canvas.getContext('2d');
+
+let W, H, R, cx, cy;
+
+// Globe view parameters
+let viewLat = 18;   // degrees
+let viewLon = 20;   // degrees
+let zoomLvl = 1.0;
+
+// Smooth-interpolation targets
+let tgtLat  = 18, tgtLon = 20, tgtZoom = 1.0;
+
+let spinning = true;
+const SPIN_SPD = 0.13; // degrees/frame
+
+// Phase: 'globe' | 'zooming' | 'germany' | 'city_zoom' | 'done'
+let phase   = 'globe';
+let hovCity = null;
+let stars   = [];
+
+// Pulse timer for Germany glow
+let glowPulse = 0;
+
+function resize() {
+  W  = canvas.width  = window.innerWidth;
+  H  = canvas.height = window.innerHeight;
+  cx = W / 2;  cy = H / 2;
+  R  = Math.min(W, H) * 0.37;
+  genStars();
+}
+window.addEventListener('resize', resize);
+
+/* ── Seeded PRNG (Mulberry32) ── */
+function mulberry32(seed) {
+  return () => {
+    seed += 0x6D2B79F5;
+    let t = seed;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function genStars() {
+  const rng = mulberry32(42);
+  stars = Array.from({ length: 200 }, () => ({
+    x: rng() * W, y: rng() * H,
+    r: rng() * 1.5 + 0.2,
+    a: rng() * 0.55 + 0.08,
+  }));
+}
+
+/* ════════════════════════════════════════
+   ORTHOGRAPHIC PROJECTION
+════════════════════════════════════════ */
+function project(lat, lon) {
+  const φ    = lat * Math.PI / 180;
+  const λ    = lon * Math.PI / 180;
+  const φ0   = viewLat * Math.PI / 180;
+  const λ0   = viewLon * Math.PI / 180;
+  const cφ0  = Math.cos(φ0), sφ0 = Math.sin(φ0);
+  const cφ   = Math.cos(φ),  sφ  = Math.sin(φ);
+  const dλ   = λ - λ0;
+  const cdλ  = Math.cos(dλ);
+
+  const x = cφ * Math.sin(dλ);
+  const y = cφ0 * sφ - sφ0 * cφ * cdλ;
+  const z = sφ0 * sφ + cφ0 * cφ * cdλ;
+
+  const s = R * zoomLvl;
+  return { sx: cx + s * x, sy: cy - s * y, z, v: z > -0.02 };
+}
+
+/* ── Draw a projected polygon (clipped to sphere disc) ── */
+function drawPoly(pts, fill, stroke, lw) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R * zoomLvl, 0, Math.PI * 2);
+  ctx.clip();
+
+  ctx.beginPath();
+  let pen = false;
+  for (const [lat, lon] of pts) {
+    const p = project(lat, lon);
+    if (p.v) {
+      if (!pen) { ctx.moveTo(p.sx, p.sy); pen = true; }
+      else ctx.lineTo(p.sx, p.sy);
+    } else {
+      if (pen) pen = false;
+    }
+  }
+  ctx.closePath();
+  if (fill)   { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1; ctx.stroke(); }
+  ctx.restore();
+}
+
+/* ── Draw a latitude parallel ── */
+function drawLatLine(lat, step) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R * zoomLvl, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.beginPath();
+  let pen = false;
+  for (let lo = -180; lo <= 182; lo += step) {
+    const p = project(lat, lo);
+    if (p.v) {
+      if (!pen) { ctx.moveTo(p.sx, p.sy); pen = true; }
+      else ctx.lineTo(p.sx, p.sy);
+    } else pen = false;
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ── Draw a longitude meridian ── */
+function drawLonLine(lon, step) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R * zoomLvl, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.beginPath();
+  let pen = false;
+  for (let la = -90; la <= 90; la += step) {
+    const p = project(la, lon);
+    if (p.v) {
+      if (!pen) { ctx.moveTo(p.sx, p.sy); pen = true; }
+      else ctx.lineTo(p.sx, p.sy);
+    } else pen = false;
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ════════════════════════════════════════
+   MAIN DRAW
+════════════════════════════════════════ */
+function draw(ts) {
+  glowPulse = ts * 0.0015;
+  const sc = R * zoomLvl;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Stars ──
+  stars.forEach(s => {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${s.a})`;
+    ctx.fill();
+  });
+
+  // ── Ocean sphere ──
+  const og = ctx.createRadialGradient(
+    cx - sc * .28, cy - sc * .28, sc * .05,
+    cx, cy, sc
+  );
+  og.addColorStop(0,  '#2a5888');
+  og.addColorStop(.5, '#0e2438');
+  og.addColorStop(1,  '#040d1a');
+  ctx.beginPath(); ctx.arc(cx, cy, sc, 0, Math.PI * 2);
+  ctx.fillStyle = og; ctx.fill();
+
+  // ── Grid ──
+  ctx.globalAlpha = .04;
+  ctx.strokeStyle = '#66aadd'; ctx.lineWidth = .6;
+  for (let la = -60; la <= 60; la += 30) drawLatLine(la, 3);
+  for (let lo = -150; lo <= 180; lo += 30) drawLonLine(lo, 3);
+  ctx.globalAlpha = 1;
+
+  // ── Equator ──
+  ctx.save();
+  ctx.globalAlpha = .10;
+  ctx.strokeStyle = '#88bbee'; ctx.lineWidth = .9;
+  drawLatLine(0, 2);
+  ctx.restore();
+
+  // ── Continents ──
+  ctx.globalAlpha = .88;
+  LANDS.forEach(pts => drawPoly(pts, 'rgba(52,74,42,.95)', 'rgba(80,110,55,.55)', .7));
+  ctx.globalAlpha = 1;
+
+  // ── Germany — animated glow ──
+  const glow = 18 + Math.sin(glowPulse * 2.4) * 6;
+  ctx.save();
+  ctx.shadowColor = '#ffe600';
+  ctx.shadowBlur  = glow * Math.min(zoomLvl, 2.5);
+  drawPoly(GERMANY, 'rgba(255,212,0,.92)', '#ffe600', 1.6);
+  ctx.restore();
+
+  // ── Limb darkening ──
+  const ld = ctx.createRadialGradient(cx, cy, sc * .68, cx, cy, sc);
+  ld.addColorStop(0, 'transparent');
+  ld.addColorStop(1, 'rgba(2,5,12,.75)');
+  ctx.beginPath(); ctx.arc(cx, cy, sc, 0, Math.PI * 2);
+  ctx.fillStyle = ld; ctx.fill();
+
+  // ── Atmosphere ring ──
+  const atm = ctx.createRadialGradient(cx, cy, sc * .9, cx, cy, sc * 1.22);
+  atm.addColorStop(0,  'rgba(60,140,255,.15)');
+  atm.addColorStop(.6, 'rgba(60,140,255,.05)');
+  atm.addColorStop(1,  'transparent');
+  ctx.beginPath(); ctx.arc(cx, cy, sc * 1.22, 0, Math.PI * 2);
+  ctx.fillStyle = atm; ctx.fill();
+
+  // ── Specular highlight ──
+  const sh = ctx.createRadialGradient(
+    cx - sc * .34, cy - sc * .34, 0,
+    cx - sc * .18, cy - sc * .18, sc * .62
+  );
+  sh.addColorStop(0, 'rgba(255,255,255,.08)');
+  sh.addColorStop(1, 'transparent');
+  ctx.beginPath(); ctx.arc(cx, cy, sc, 0, Math.PI * 2);
+  ctx.fillStyle = sh; ctx.fill();
+
+  // ── Cities (only in germany/city_zoom phases) ──
+  if (phase === 'germany' || phase === 'city_zoom') {
+    drawCities();
+  }
+}
+
+/* ── City markers ── */
+function drawCities() {
+  CITIES.forEach(([name, lat, lon]) => {
+    const p = project(lat, lon);
+    if (!p.v) return;
+    const hov = hovCity && hovCity[0] === name;
+    const rc  = hov ? 8 : 5;
+
+    // Pulse ring on hover
+    if (hov) {
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, 14, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,230,0,.40)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Dot
+    ctx.beginPath(); ctx.arc(p.sx, p.sy, rc, 0, Math.PI * 2);
+    ctx.fillStyle   = hov ? '#ffe600' : 'rgba(255,218,50,.90)';
+    ctx.fill();
+    ctx.strokeStyle = '#101010'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // Label
+    ctx.font      = `${hov ? 'bold ' : ''}${hov ? 13 : 10}px 'Outfit', sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.shadowColor = '#000'; ctx.shadowBlur = 4;
+    ctx.fillStyle = hov ? '#ffe600' : 'rgba(255,255,255,.88)';
+    ctx.fillText(name, p.sx + 11, p.sy + 4);
+    ctx.shadowBlur = 0;
+  });
+}
+
+/* ════════════════════════════════════════
+   ANIMATION LOOP
+════════════════════════════════════════ */
+let _afId = null;
+
+function startLoop() {
+  if (_afId) return;
+  (function frame(ts) {
+    _afId = requestAnimationFrame(frame);
+
+    if (spinning) {
+      viewLon -= SPIN_SPD;
+      if (viewLon < -180) viewLon += 360;
+    } else {
+      // Ease toward targets
+      viewLat += (tgtLat  - viewLat) * .055;
+      viewLon += angDiff(tgtLon, viewLon) * .055;
+      zoomLvl += (tgtZoom - zoomLvl) * .055;
+    }
+
+    draw(ts);
+  })(0);
+}
+
+function angDiff(target, current) {
+  let d = target - current;
+  while (d >  180) d -= 360;
+  while (d < -180) d += 360;
+  return d;
+}
+
+/* ════════════════════════════════════════
+   STATE MACHINE
+════════════════════════════════════════ */
+function zoomToGermany() {
+  if (phase !== 'globe') return;
+  phase = 'zooming';
+  spinning = false;
+  tgtLat   = 52;
+  tgtLon   = 10;
+  tgtZoom  = 2.7;
+  document.getElementById('globe-hint').style.opacity = '0';
+
+  setTimeout(() => {
+    if (phase !== 'zooming') return;
+    phase = 'germany';
+    document.getElementById('search-wrap').classList.add('vis');
+    document.getElementById('globe-hint').textContent = 'Click a city to explore it';
+    document.getElementById('globe-hint').style.opacity = '1';
+  }, 1300);
+}
+
+function selectCity(rawName) {
+  if (phase === 'done') return;
+  const name = rawName.trim();
+
+  // Find best match
+  const city =
+    CITIES.find(c => c[0].toLowerCase() === name.toLowerCase()) ||
+    CITIES.find(c => c[0].toLowerCase().includes(name.toLowerCase())) ||
+    CITIES.find(c => name.toLowerCase().includes(c[0].toLowerCase())) ||
+    CITIES[0]; // fallback — Weimar
+
+  phase   = 'city_zoom';
+  tgtLon  = city[2];
+  tgtLat  = city[1];
+  tgtZoom = 6.5;
+  spinning = false;
+
+  // Flash
+  const fl = document.getElementById('zoom-flash');
+  fl.classList.add('show');
+  setTimeout(() => fl.classList.remove('show'), 500);
+
+  // Save to sessionStorage so index.html can use it
+  sessionStorage.setItem('selectedCity', city[0]);
+  sessionStorage.setItem('cityLayers_fromGlobe','1');
+
+  // Fade out → navigate
+  setTimeout(() => {
+    phase = 'done';
+    const ov = document.getElementById('tx-overlay');
+    ov.classList.add('show');
+    setTimeout(() => { window.location.href = 'index.html'; }, 800);
+  }, 1100);
+}
+
+/* ════════════════════════════════════════
+   INTERACTION
+════════════════════════════════════════ */
+function getCityAt(mx, my) {
+  if (phase !== 'germany' && phase !== 'city_zoom') return null;
+  for (const city of CITIES) {
+    const p = project(city[1], city[2]);
+    if (!p.v) continue;
+    if (Math.hypot(mx - p.sx, my - p.sy) < 18) return city;
+  }
+  return null;
+}
+
+function isOverGermany(mx, my) {
+  const c = project(51, 10);
+  return Math.hypot(mx - c.sx, my - c.sy) < R * 0.23;
+}
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  hovCity = getCityAt(mx, my);
+
+  const tooltip = document.getElementById('city-tooltip');
+  if (hovCity) {
+    tooltip.textContent = hovCity[0];
+    tooltip.style.left  = (e.clientX + 16) + 'px';
+    tooltip.style.top   = (e.clientY - 18) + 'px';
+    tooltip.classList.add('vis');
+    canvas.style.cursor = 'pointer';
+  } else {
+    tooltip.classList.remove('vis');
+    canvas.style.cursor =
+      (phase === 'globe' && isOverGermany(mx, my)) ? 'pointer' : 'grab';
+  }
+});
+
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  if (phase === 'germany') {
+    const city = getCityAt(mx, my);
+    if (city) { selectCity(city[0]); return; }
+  }
+
+  if (phase === 'globe') {
+    if (isOverGermany(mx, my)) zoomToGermany();
+  }
+});
+
+canvas.addEventListener('mouseleave', () => {
+  hovCity = null;
+  document.getElementById('city-tooltip').classList.remove('vis');
+});
+
+/* ── Search ── */
+function doSearch() {
+  const val = document.getElementById('city-input').value.trim();
+  if (!val) return;
+  if (phase === 'globe') {
+    zoomToGermany();
+    setTimeout(() => selectCity(val), 1500);
+  } else if (phase === 'zooming') {
+    setTimeout(() => selectCity(val), 500);
+  } else {
+    selectCity(val);
+  }
+}
+document.getElementById('search-go').addEventListener('click', doSearch);
+document.getElementById('city-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+});
+
+/* ════════════════════════════════════════
+   LOADING SEQUENCE
+════════════════════════════════════════ */
+const LOAD_STEPS = [
+  [0,     0,  'Initialising…'],
+  [280,  18,  'Placing the stars…'],
+  [620,  42,  'Mapping continents…'],
+  [1000, 68,  'Lighting up Germany…'],
+  [1400, 88,  'Preparing cities…'],
+  [1800, 100, 'Ready.'],
+];
+
+function runLoading() {
+  const bar = document.getElementById('ld-bar');
+  const msg = document.getElementById('ld-msg');
+  LOAD_STEPS.forEach(([ms, pct, txt]) => {
+    setTimeout(() => {
+      bar.style.width  = pct + '%';
+      msg.textContent  = txt;
+    }, ms);
+  });
+
+  setTimeout(() => {
+    const ls = document.getElementById('loading-screen');
+    ls.classList.add('fade-out');
+    setTimeout(() => { ls.style.display = 'none'; }, 750);
+    document.getElementById('globe-wrap').classList.add('vis');
+    startLoop();
+  }, 2100);
+}
+
+/* ════════════════════════════════════════
+   INIT
+════════════════════════════════════════ */
+resize();
+runLoading();
+</script>
+</body>
+</html>
